@@ -66,7 +66,7 @@ case .list:
             try await listAllWindows(jsonLines: config.legacyJsonLines)
             exit(0)
         } catch {
-            log("error", "\(error)")
+            logError(error)
             exit(1)
         }
     }
@@ -75,7 +75,7 @@ case .record:
     do {
         try runRecord(config)
     } catch {
-        log("error", "\(error)")
+        logError(error)
         exit(1)
     }
 case .resolve:
@@ -84,7 +84,7 @@ case .resolve:
             try await printResolvedTarget(config)
             exit(0)
         } catch {
-            log("error", "\(error)")
+            logError(error)
             exit(1)
         }
     }
@@ -95,7 +95,7 @@ case .snapshot:
             try await runSnapshot(config)
             exit(0)
         } catch {
-            log("error", "\(error)")
+            logError(error)
             exit(1)
         }
     }
@@ -117,11 +117,11 @@ case .capture:
             }
 
             if !config.framed && activeWindowCount == 0 {
-                log("error", "--window-id, --window-name, or --pid is required in non-framed mode")
+                logError(CaptureError.targetRequired("--window-id, --window-name, or --pid is required in non-framed mode"))
                 exit(1)
             }
         } catch {
-            log("error", "\(error)")
+            logError(error)
             exit(1)
         }
     }

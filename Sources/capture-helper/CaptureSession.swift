@@ -132,7 +132,7 @@ class WindowErrorDelegate: NSObject, SCStreamDelegate {
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        log("error", "window[\(windowIndex)] stream stopped: \(error)")
+        logErrorMessage(code: "stream_stopped", message: "window[\(windowIndex)] stream stopped: \(error)", context: ["windowIndex": Int(windowIndex)])
         removeWindowCapture(index: Int(windowIndex))
         logEvent(("type", "removed"), ("index", Int(windowIndex)))
     }

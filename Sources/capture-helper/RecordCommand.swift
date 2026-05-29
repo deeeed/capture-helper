@@ -2,13 +2,13 @@ import Foundation
 
 func runRecord(_ config: Config) throws -> Never {
     guard let outputPath = config.outputPath else {
-        throw CaptureError.setupFailed("record requires --output PATH")
+        throw CaptureError.targetRequired("record requires --output PATH")
     }
     guard config.initialWindowId != nil || config.initialPid != nil || !config.initialNames.isEmpty else {
-        throw CaptureError.setupFailed("record requires --window-id, --pid, or --window-name")
+        throw CaptureError.targetRequired("record requires --window-id, --pid, or --window-name")
     }
     guard let ffmpeg = findExecutable(config.ffmpegPath ?? "ffmpeg") else {
-        throw CaptureError.setupFailed("ffmpeg not found; install ffmpeg or pass --ffmpeg /path/to/ffmpeg")
+        throw CaptureError.dependencyMissing("ffmpeg not found; install ffmpeg or pass --ffmpeg /path/to/ffmpeg")
     }
 
     let fm = FileManager.default

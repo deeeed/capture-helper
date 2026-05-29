@@ -59,17 +59,17 @@ func handleCommand(_ command: String) async {
     } else if command.hasPrefix("-") {
         let indexString = String(command.dropFirst(1))
         guard let index = Int(indexString) else {
-            log("error", "invalid index: \(indexString)")
+            logErrorMessage(code: "invalid_index", message: "invalid index: \(indexString)")
             return
         }
         guard index < slots.count, slots[index] != nil else {
-            log("error", "no window at index \(index)")
+            logErrorMessage(code: "window_slot_not_found", message: "no window at index \(index)", context: ["index": index])
             return
         }
         removeWindowCapture(index: index)
         logEvent(("type", "removed"), ("index", index))
     } else {
-        log("error", "unknown command: \(command)")
+        logErrorMessage(code: "unknown_command", message: "unknown command: \(command)")
     }
 }
 

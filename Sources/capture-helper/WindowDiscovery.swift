@@ -5,11 +5,17 @@ import CoreGraphics
 enum CaptureError: Error, CustomStringConvertible {
     case windowNotFound(String)
     case setupFailed(String)
+    case targetRequired(String)
+    case dependencyMissing(String)
+    case snapshotFailed(String)
 
     var description: String {
         switch self {
         case .windowNotFound(let message): return message
         case .setupFailed(let message): return message
+        case .targetRequired(let message): return message
+        case .dependencyMissing(let message): return message
+        case .snapshotFailed(let message): return message
         }
     }
 }

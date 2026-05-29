@@ -116,6 +116,7 @@ The wrapper resolves the binary in this order:
   - baseline profile, no B-frames
 - `list` / `doctor` / `version`: JSON on stdout by default
 - streaming/capture diagnostics: JSON lines on stderr
+- command failures: JSON error lines on stderr with stable `code` values such as `target_required` and `window_not_found`
 - signal handling: `SIGINT`/`SIGTERM` perform cleanup for direct capture; `record --duration` stops automatically
 
 See [docs/protocol.md](docs/protocol.md) for the framed stream and event contract.
@@ -145,7 +146,7 @@ Higher-level tools should resolve their domain objects to a concrete macOS windo
 
 ```bash
 swift build -c release
-swift test
+swift test # includes subprocess CLI/error-shape tests
 npm run build:native
 npm run doctor
 npm pack --dry-run

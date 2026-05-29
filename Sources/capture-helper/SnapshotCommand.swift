@@ -2,7 +2,7 @@ import Foundation
 
 func runSnapshot(_ config: Config) async throws {
     guard let outputPath = config.outputPath else {
-        throw CaptureError.setupFailed("snapshot requires --output PATH")
+        throw CaptureError.targetRequired("snapshot requires --output PATH")
     }
 
     let resolved = try await resolveTarget(config)
@@ -15,7 +15,7 @@ func runSnapshot(_ config: Config) async throws {
 
     let screencapture = "/usr/sbin/screencapture"
     guard fileManager.isExecutableFile(atPath: screencapture) else {
-        throw CaptureError.setupFailed("/usr/sbin/screencapture not found")
+        throw CaptureError.dependencyMissing("/usr/sbin/screencapture not found")
     }
 
     let process = Process()
@@ -27,7 +27,7 @@ func runSnapshot(_ config: Config) async throws {
 
     let size = (try? fileManager.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?.intValue ?? 0
     guard process.terminationStatus == 0, size > 0 else {
-        throw CaptureError.setupFailed("snapshot failed with status \(process.terminationStatus)")
+        throw CaptureError.snapshotFailed("snapshot failed with status \(process.terminationStatus)")
     }
 
     emitJSONObject([

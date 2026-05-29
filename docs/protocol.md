@@ -168,6 +168,30 @@ The helper writes JSON lines to stderr for capture/stream/record diagnostics. Ev
 
 Consumers should treat stderr as the structured control/diagnostic channel and stdout as binary media for capture/stream commands.
 
+
+## Structured errors
+
+Command failures emit one JSON line on stderr with a stable error `code`:
+
+```json
+{"type":"error","code":"target_required","message":"target selector required: --window-id, --pid, or --window-name"}
+```
+
+Current stable codes include:
+
+| Code | Meaning |
+| --- | --- |
+| `target_required` | Required selector or output argument is missing. |
+| `window_not_found` | Target selector was valid, but no matching macOS window was found. |
+| `dependency_missing` | Required external tool such as `ffmpeg` or `screencapture` is missing. |
+| `snapshot_failed` | Snapshot command resolved a window but image capture failed. |
+| `setup_failed` | Capture setup failed before streaming could start. |
+| `stream_stopped` | A running ScreenCaptureKit stream stopped with an error. |
+| `invalid_index` | Framed stdin command used an invalid slot index. |
+| `window_slot_not_found` | Framed stdin command referenced a missing slot. |
+| `unknown_command` | Framed stdin command was not recognized. |
+| `unexpected_error` | Non-`CaptureError` failure. |
+
 ## Target resolution boundary
 
 The helper intentionally accepts generic macOS target selectors only. Domain-specific tools should perform their own resolution before invoking it.

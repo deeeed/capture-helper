@@ -18,6 +18,10 @@ struct ResolvedTarget {
 }
 
 func resolveTarget(_ config: Config) async throws -> ResolvedTarget {
+    guard config.initialWindowId != nil || config.initialPid != nil || !config.initialNames.isEmpty else {
+        throw CaptureError.targetRequired("target selector required: --window-id, --pid, or --window-name")
+    }
+
     let onScreenWindows = try await loadWindows(onScreenOnly: true)
     let onScreenIds = Set(onScreenWindows.map(\.windowID))
     let allWindows = try await loadWindows(onScreenOnly: false)
@@ -57,7 +61,7 @@ func resolveTarget(_ config: Config) async throws -> ResolvedTarget {
         )
     }
 
-    throw CaptureError.setupFailed("target selector required: --window-id, --pid, or --window-name")
+    throw CaptureError.targetRequired("target selector required: --window-id, --pid, or --window-name")
 }
 
 func rankedPidCandidates(_ windows: [SCWindow], pid: pid_t) -> [SCWindow] {
