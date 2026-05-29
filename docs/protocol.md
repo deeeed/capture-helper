@@ -22,7 +22,7 @@ Current checks include:
 
 - macOS version
 - native binary presence
-- optional `ffmpeg` presence
+- optional `ffmpeg` presence for external workflows
 - ScreenCaptureKit window enumeration / Screen Recording permission signal
 
 ### `list`
@@ -112,13 +112,13 @@ capture-helper --window-name "Simulator"
 
 ### `record`
 
-Records a target to MP4 using `ffmpeg`.
+Records a target to MP4 using a native AVFoundation writer.
 
 ```bash
 capture-helper record --window-id 12345 --duration 5 --output evidence.mp4
 ```
 
-`record` invokes a child `capture` process and pipes its H.264 output to `ffmpeg`.
+`record` resolves the target window, captures frames with ScreenCaptureKit, and writes an MP4 directly. It does not require `ffmpeg`.
 
 ### `stream`
 
@@ -160,7 +160,7 @@ The helper writes JSON lines to stderr for capture/stream/record diagnostics. Ev
 {"type":"added","index":0,"name":"Simulator","width":720,"height":480}
 {"type":"add_failed","name":"Simulator","error":"no window matching 'Simulator'"}
 {"type":"record_start","output":"evidence.mp4"}
-{"type":"record_complete","output":"evidence.mp4","captureStatus":0,"ffmpegStatus":0}
+{"type":"record_complete","engine":"native","output":"evidence.mp4","frames":75,"bytes":123456}
 {"type":"removed","index":0}
 {"type":"info","msg":"shutting down"}
 {"type":"error","msg":"--window-id, --window-name, or --pid is required in non-framed mode"}
@@ -198,8 +198,8 @@ Stable doctor codes include:
 | `unsupported_macos` | macOS 13.0+ is required. |
 | `native_binary_present` | Running native binary is executable. |
 | `native_binary_missing` | Running native binary is not executable. |
-| `ffmpeg_present` | `ffmpeg` is available for `record`. |
-| `ffmpeg_missing` | `ffmpeg` is missing; this is optional unless using `record`. |
+| `ffmpeg_present` | `ffmpeg` is available for external workflows. |
+| `ffmpeg_missing` | `ffmpeg` is missing; native `record` does not require it. |
 | `screencapture_present` | `/usr/sbin/screencapture` is available for `snapshot`. |
 | `screencapture_missing` | `snapshot` dependency is unavailable. |
 | `window_enumeration_ok` | ScreenCaptureKit returned capturable windows. |
@@ -222,7 +222,8 @@ Current stable codes include:
 | --- | --- |
 | `target_required` | Required selector or output argument is missing. |
 | `window_not_found` | Target selector was valid, but no matching macOS window was found. |
-| `dependency_missing` | Required external tool such as `ffmpeg` or `screencapture` is missing. |
+| `dependency_missing` | Required external tool such as `screencapture` is missing. |
+| `record_failed` | Record command resolved a window but MP4 writing failed. |
 | `snapshot_failed` | Snapshot command resolved a window but image capture failed. |
 | `setup_failed` | Capture setup failed before streaming could start. |
 | `stream_stopped` | A running ScreenCaptureKit stream stopped with an error. |

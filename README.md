@@ -2,7 +2,7 @@
 
 Generic macOS window capture helper for agents, automation tools, and evidence pipelines.
 
-`capture-helper` is a small Swift CLI built on ScreenCaptureKit. It discovers macOS windows, captures exact window targets, streams H.264 Annex B bytes, and records MP4 evidence through `ffmpeg`.
+`capture-helper` is a small Swift CLI built on ScreenCaptureKit. It discovers macOS windows, captures exact window targets, streams H.264 Annex B bytes, and records MP4 evidence with a native AVFoundation writer.
 
 ## Status
 
@@ -15,7 +15,7 @@ The CLI is intentionally generic. Product-specific concepts such as Farmslot slo
 - macOS 13.0+
 - Xcode command-line tools / Swift toolchain
 - Screen Recording permission for the terminal or parent app
-- Optional: `ffmpeg` for `record` mode
+- Optional: `ffmpeg` for external workflows that still want it; built-in `record` mode is native.
 
 ## Install
 
@@ -75,6 +75,9 @@ capture-helper doctor --open-permissions --json
 # List windows as a machine-readable JSON object
 capture-helper list --json
 
+# Human-readable table
+capture-helper list --human
+
 # Legacy JSON-lines listing
 capture-helper --list-windows
 capture-helper list --json-lines
@@ -90,7 +93,7 @@ capture-helper --window-name "Simulator" > /tmp/capture.h264
 # Framed multi-window stream with stdin control
 capture-helper stream --framed --window-id 12345 > /tmp/windows.h264
 
-# Record MP4 evidence with ffmpeg
+# Record MP4 evidence without ffmpeg
 capture-helper record --window-id 12345 --duration 5 --output evidence.mp4
 ```
 

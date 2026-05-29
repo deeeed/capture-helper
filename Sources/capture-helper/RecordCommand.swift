@@ -1,113 +1,254 @@
+import AVFoundation
+import CoreGraphics
+import CoreMedia
 import Foundation
+import ScreenCaptureKit
 
-func runRecord(_ config: Config) throws -> Never {
+func runRecord(_ config: Config) async throws {
     guard let outputPath = config.outputPath else {
         throw CaptureError.targetRequired("record requires --output PATH")
     }
     guard config.initialWindowId != nil || config.initialPid != nil || !config.initialNames.isEmpty else {
         throw CaptureError.targetRequired("record requires --window-id, --pid, or --window-name")
     }
-    guard let ffmpeg = findExecutable(config.ffmpegPath ?? "ffmpeg") else {
-        throw CaptureError.dependencyMissing("ffmpeg not found; install ffmpeg or pass --ffmpeg /path/to/ffmpeg")
-    }
 
-    let fm = FileManager.default
     let outputURL = URL(fileURLWithPath: outputPath)
     let outputDir = outputURL.deletingLastPathComponent().path
+    let fm = FileManager.default
     if !fm.fileExists(atPath: outputDir) {
         try fm.createDirectory(atPath: outputDir, withIntermediateDirectories: true)
     }
-
-    let executable = currentExecutablePath()
-    var captureArgs: [String] = ["capture", "--max-fps", "\(config.maxFps)", "--max-size", "\(config.maxSize)"]
-    if let duration = config.durationSeconds {
-        captureArgs += ["--duration", "\(duration)"]
-    }
-    if let windowId = config.initialWindowId {
-        captureArgs += ["--window-id", "\(windowId)"]
-    } else if let pid = config.initialPid {
-        captureArgs += ["--pid", "\(pid)"]
-    } else {
-        if let appName = config.initialAppName {
-            captureArgs += ["--app-name", appName]
-        }
-        for name in config.initialNames {
-            captureArgs += ["--window-name", name]
-        }
+    if fm.fileExists(atPath: outputPath) {
+        try fm.removeItem(at: outputURL)
     }
 
-    let mediaPipe = Pipe()
+    let resolved = try await resolveTarget(config)
+    let window = resolved.window
+    let srcW = Int(window.frame.width)
+    let srcH = Int(window.frame.height)
+    let scale = min(Double(config.maxSize) / Double(max(srcW, srcH)), 1.0)
+    let outW = max(2, Int(Double(srcW) * scale) & ~1)
+    let outH = max(2, Int(Double(srcH) * scale) & ~1)
 
-    let capture = Process()
-    capture.executableURL = URL(fileURLWithPath: executable)
-    capture.arguments = captureArgs
-    capture.standardOutput = mediaPipe
-    capture.standardError = FileHandle.standardError
+    let filter = SCContentFilter(desktopIndependentWindow: window)
+    let streamConfig = SCStreamConfiguration()
+    streamConfig.minimumFrameInterval = CMTime(value: 1, timescale: config.maxFps)
+    streamConfig.width = outW
+    streamConfig.height = outH
+    streamConfig.pixelFormat = kCVPixelFormatType_32BGRA
+    streamConfig.showsCursor = false
+    streamConfig.queueDepth = 5
 
-    let ffmpegProcess = Process()
-    ffmpegProcess.executableURL = URL(fileURLWithPath: ffmpeg)
-    ffmpegProcess.arguments = [
-        "-nostdin",
-        "-framerate", "\(config.maxFps)",
-        "-fflags", "+genpts",
-        "-f", "h264",
-        "-i", "pipe:0",
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        "-y", outputPath
-    ]
-    ffmpegProcess.standardInput = mediaPipe
-    ffmpegProcess.standardError = FileHandle.standardError
+    let delegate = NativeRecordDelegate(
+        outputURL: outputURL,
+        width: outW,
+        height: outH,
+        maxFps: config.maxFps
+    )
+    let stream = SCStream(filter: filter, configuration: streamConfig, delegate: delegate)
+    let queue = DispatchQueue(label: "record-writer")
+    try stream.addStreamOutput(delegate, type: .screen, sampleHandlerQueue: queue)
 
-    logEvent(("type", "record_start"), ("output", outputPath), ("ffmpeg", ffmpeg), ("captureArgs", captureArgs.joined(separator: " ")))
+    logEvent(
+        ("type", "record_start"),
+        ("engine", "native"),
+        ("output", outputPath),
+        ("selector", resolved.selector),
+        ("windowId", Int(window.windowID)),
+        ("width", outW),
+        ("height", outH)
+    )
 
-    try ffmpegProcess.run()
-    try capture.run()
+    try await stream.startCapture()
+    await waitForRecordStop(duration: config.durationSeconds)
+    try await stopStream(stream)
+    try await delegate.finish()
 
-    func waitForExit(_ process: Process, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while process.isRunning && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-        return !process.isRunning
+    let size = (try? fm.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?.intValue ?? 0
+    guard size > 0 else {
+        throw CaptureError.recordFailed("recording produced an empty file: \(outputPath)")
     }
 
-    func stopProcess(_ process: Process, timeout: TimeInterval) {
-        guard process.isRunning else { return }
-        Darwin.kill(process.processIdentifier, SIGTERM)
-        if !waitForExit(process, timeout: timeout), process.isRunning {
-            Darwin.kill(process.processIdentifier, SIGKILL)
-            _ = waitForExit(process, timeout: 1.0)
+    logEvent(
+        ("type", "record_complete"),
+        ("engine", "native"),
+        ("output", outputPath),
+        ("frames", delegate.writtenFrames),
+        ("bytes", size)
+    )
+}
+
+private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+    private let outputURL: URL
+    private let maxFps: Int32
+    private let minFrameInterval: CMTime
+    private let writer: AVAssetWriter
+    private let input: AVAssetWriterInput
+    private let adaptor: AVAssetWriterInputPixelBufferAdaptor
+
+    private var firstPts: CMTime?
+    private var lastWrittenPts: CMTime = .invalid
+    private var didStartWriting = false
+    private var didFinish = false
+    private var frameCount = 0
+    private var streamError: Error?
+
+    var writtenFrames: Int { frameCount }
+
+    init(outputURL: URL, width: Int, height: Int, maxFps: Int32) {
+        self.outputURL = outputURL
+        self.maxFps = maxFps
+        self.minFrameInterval = CMTime(value: 1, timescale: maxFps)
+
+        do {
+            self.writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+        } catch {
+            fatalError("AVAssetWriter setup failed unexpectedly: \(error)")
+        }
+
+        let settings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: max(width * height * 6, 500_000),
+                AVVideoMaxKeyFrameIntervalKey: Int(maxFps) * 2,
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel
+            ]
+        ]
+        self.input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
+        self.input.expectsMediaDataInRealTime = true
+
+        self.adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height
+            ]
+        )
+
+        super.init()
+
+        guard writer.canAdd(input) else {
+            fatalError("AVAssetWriter cannot add video input")
+        }
+        writer.add(input)
+    }
+
+    func stream(_ stream: SCStream, didStopWithError error: Error) {
+        streamError = error
+        logErrorMessage(code: "stream_stopped", message: "record stream stopped: \(error)")
+    }
+
+    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard type == .screen, !didFinish else { return }
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
+        let sourcePts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if firstPts == nil {
+            firstPts = sourcePts
+        }
+        guard let firstPts else { return }
+
+        let pts = CMTimeSubtract(sourcePts, firstPts)
+        if lastWrittenPts.isValid {
+            let delta = CMTimeSubtract(pts, lastWrittenPts)
+            if delta.isNumeric && CMTimeCompare(delta, minFrameInterval) < 0 {
+                return
+            }
+        }
+
+        if !didStartWriting {
+            guard writer.startWriting() else {
+                logErrorMessage(code: "record_failed", message: "AVAssetWriter failed to start: \(writer.error?.localizedDescription ?? "unknown error")")
+                didFinish = true
+                return
+            }
+            writer.startSession(atSourceTime: .zero)
+            didStartWriting = true
+        }
+
+        guard input.isReadyForMoreMediaData else { return }
+        if adaptor.append(pixelBuffer, withPresentationTime: pts) {
+            lastWrittenPts = pts
+            frameCount += 1
+            if frameCount == 1 || frameCount % 300 == 0 {
+                log("info", "record frames=\(frameCount)")
+            }
+        } else {
+            logErrorMessage(code: "record_failed", message: "failed to append video frame: \(writer.error?.localizedDescription ?? "unknown error")")
         }
     }
 
-    func stopChildren() {
-        stopProcess(capture, timeout: 2.0)
-        try? mediaPipe.fileHandleForWriting.close()
-        if ffmpegProcess.isRunning {
-            _ = waitForExit(ffmpegProcess, timeout: 5.0)
+    func finish() async throws {
+        if let streamError {
+            throw streamError
         }
-        if ffmpegProcess.isRunning {
-            stopProcess(ffmpegProcess, timeout: 1.0)
+
+        guard didStartWriting else {
+            writer.cancelWriting()
+            throw CaptureError.recordFailed("recording finished before any frames were captured")
+        }
+        guard !didFinish else { return }
+        didFinish = true
+        input.markAsFinished()
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            writer.finishWriting {
+                if let error = self.writer.error {
+                    continuation.resume(throwing: CaptureError.recordFailed("AVAssetWriter failed: \(error.localizedDescription)"))
+                } else if self.writer.status == .completed {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: CaptureError.recordFailed("AVAssetWriter ended with status \(self.writer.status.rawValue)"))
+                }
+            }
         }
     }
+}
 
-    capture.waitUntilExit()
-    try? mediaPipe.fileHandleForWriting.close()
-    if config.durationSeconds == nil, capture.terminationStatus == 0 {
-        stopChildren()
-    } else {
-        ffmpegProcess.waitUntilExit()
+private func stopStream(_ stream: SCStream) async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        stream.stopCapture { error in
+            if let error {
+                continuation.resume(throwing: error)
+            } else {
+                continuation.resume()
+            }
+        }
+    }
+}
+
+private func waitForRecordStop(duration: Double?) async {
+    if let duration {
+        try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+        return
     }
 
-    let ok = fm.fileExists(atPath: outputPath) && (try? fm.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?.intValue ?? 0 > 0
-    if ok {
-        logEvent(("type", "record_complete"), ("output", outputPath), ("captureStatus", capture.terminationStatus), ("ffmpegStatus", ffmpegProcess.terminationStatus))
-        exit(ffmpegProcess.terminationStatus == 0 ? 0 : 1)
-    } else {
-        logEvent(("type", "record_failed"), ("output", outputPath), ("captureStatus", capture.terminationStatus), ("ffmpegStatus", ffmpegProcess.terminationStatus))
-        exit(1)
+    await withCheckedContinuation { continuation in
+        final class StopState {
+            var didResume = false
+            var sources: [DispatchSourceSignal] = []
+        }
+
+        let state = StopState()
+        let resumeOnce = {
+            guard !state.didResume else { return }
+            state.didResume = true
+            for source in state.sources {
+                source.cancel()
+            }
+            continuation.resume()
+        }
+
+        signal(SIGINT, SIG_IGN)
+        signal(SIGTERM, SIG_IGN)
+        for signalNumber in [SIGINT, SIGTERM] {
+            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+            source.setEventHandler(handler: resumeOnce)
+            state.sources.append(source)
+            source.resume()
+        }
     }
 }

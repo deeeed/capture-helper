@@ -108,6 +108,8 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
             cfg.framed = true
         case "--json":
             cfg.json = true
+        case "--human", "--text":
+            cfg.json = false
         case "--json-lines", "--jsonl":
             cfg.legacyJsonLines = true
         case "--list-windows":
@@ -161,12 +163,17 @@ func exitUsage() -> Never {
     Record/snapshot options:
       --output, -o <path>     MP4 output path for record, image path for snapshot
       --duration <seconds>    Stop automatically after duration
-      --ffmpeg <path>         Explicit ffmpeg path
+      --ffmpeg <path>         Check an explicit ffmpeg path in doctor output
 
     Permission options:
       --open-permissions      Open the macOS Screen Recording permission pane
       --request-permission    Ask macOS to prompt for Screen Recording when possible
       --status-only           Only report permission state; do not request/open
+
+    Output options:
+      --json                  Machine-readable JSON output (default)
+      --human, --text         Human-readable output for supported commands
+      --json-lines, --jsonl   JSON-lines output for list
 
     Framed stdin commands:
       +name <substring>       Add window by title substring

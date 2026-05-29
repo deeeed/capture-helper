@@ -7,6 +7,7 @@ extension CaptureError {
         case .setupFailed: return "setup_failed"
         case .targetRequired: return "target_required"
         case .dependencyMissing: return "dependency_missing"
+        case .recordFailed: return "record_failed"
         case .snapshotFailed: return "snapshot_failed"
         }
     }

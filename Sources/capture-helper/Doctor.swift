@@ -103,7 +103,7 @@ func doctorChecks() async -> [DoctorCheck] {
         ok: ffmpeg != nil,
         code: ffmpeg != nil ? DoctorCode.ffmpegPresent : DoctorCode.ffmpegMissing,
         required: false,
-        message: ffmpeg == nil ? "ffmpeg is optional unless using record mode" : "ffmpeg is available for record mode",
+        message: ffmpeg == nil ? "ffmpeg is optional; native record mode does not require it" : "ffmpeg is available for external workflows",
         value: ffmpeg ?? "not found",
         details: [:]
     ))

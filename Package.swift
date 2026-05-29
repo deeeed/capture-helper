@@ -14,6 +14,7 @@ let package = Package(
             name: "capture-helper",
             linkerSettings: [
                 .linkedFramework("AppKit"),
+                .linkedFramework("AVFoundation"),
                 .linkedFramework("CoreGraphics"),
                 .linkedFramework("CoreMedia"),
                 .linkedFramework("ScreenCaptureKit"),

@@ -19,9 +19,9 @@ npm pack --dry-run
 ## Tag release
 
 ```bash
-git tag -a v0.1.4 -m "v0.1.4"
+git tag -a v0.1.5 -m "v0.1.5"
 git push origin main
-git push origin v0.1.4
+git push origin v0.1.5
 ```
 
 The release workflow builds a macOS arm64 binary, attaches it to the GitHub release, and publishes the npm package.
@@ -29,7 +29,7 @@ The release workflow builds a macOS arm64 binary, attaches it to the GitHub rele
 ## Verify release
 
 ```bash
-gh release view v0.1.4 --repo deeeed/capture-helper
+gh release view v0.1.5 --repo deeeed/capture-helper
 npm dist-tag ls @siteed/capture-helper
 npm install -g @siteed/capture-helper@latest
 capture-helper version
@@ -39,4 +39,4 @@ capture-helper version
 
 - The release workflow currently builds arm64 on `macos-14`.
 - Universal binary / x86_64 release packaging is a follow-up.
-- Homebrew formula publishing is prepared by `Formula/capture-helper.rb`; it still needs a tap repo such as `deeeed/homebrew-tap` or `siteed/homebrew-tap`.
+- Homebrew formula publishing is mirrored into `deeeed/homebrew-tap`.

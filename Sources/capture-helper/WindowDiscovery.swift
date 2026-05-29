@@ -7,6 +7,7 @@ enum CaptureError: Error, CustomStringConvertible {
     case setupFailed(String)
     case targetRequired(String)
     case dependencyMissing(String)
+    case recordFailed(String)
     case snapshotFailed(String)
 
     var description: String {
@@ -15,6 +16,7 @@ enum CaptureError: Error, CustomStringConvertible {
         case .setupFailed(let message): return message
         case .targetRequired(let message): return message
         case .dependencyMissing(let message): return message
+        case .recordFailed(let message): return message
         case .snapshotFailed(let message): return message
         }
     }
@@ -49,15 +51,64 @@ func allWindowObjects() async throws -> [[String: Any]] {
     return allWindows.map { windowObject($0, onScreenIds: onScreenIds) }
 }
 
-func listAllWindows(jsonLines: Bool) async throws {
+func listAllWindows(jsonLines: Bool, human: Bool = false) async throws {
     let windows = try await allWindowObjects()
-    if jsonLines {
+    if human {
+        printWindowTable(windows)
+    } else if jsonLines {
         for window in windows {
             emitJSONLine(window)
         }
     } else {
         emitJSONObject(["type": "windows", "windows": windows, "count": windows.count])
     }
+}
+
+func printWindowTable(_ windows: [[String: Any]]) {
+    let capturable = windows.filter { window in
+        let width = window["width"] as? Int ?? 0
+        let height = window["height"] as? Int ?? 0
+        let layer = window["layer"] as? Int ?? Int.max
+        let ratio = Double(width) / Double(max(height, 1))
+        return width > 100 && height > 100 && layer == 0 && ratio < 10
+    }.sorted { lhs, rhs in
+        let lhsOnScreen = lhs["onScreen"] as? Bool ?? false
+        let rhsOnScreen = rhs["onScreen"] as? Bool ?? false
+        if lhsOnScreen != rhsOnScreen { return lhsOnScreen && !rhsOnScreen }
+        let lhsArea = (lhs["width"] as? Int ?? 0) * (lhs["height"] as? Int ?? 0)
+        let rhsArea = (rhs["width"] as? Int ?? 0) * (rhs["height"] as? Int ?? 0)
+        return lhsArea > rhsArea
+    }
+
+    writeString("capture-helper windows: \(windows.count) total, \(capturable.count) likely capturable\n")
+    writeString("ID        PID       SCREEN  SIZE        APP                         TITLE\n")
+    writeString("--------  --------  ------  ----------  --------------------------  ------------------------------\n")
+
+    for window in capturable.prefix(80) {
+        let id = "\(window["id"] as? Int ?? 0)"
+        let pid = "\(window["pid"] as? Int ?? 0)"
+        let screen = (window["onScreen"] as? Bool ?? false) ? "yes" : "no"
+        let width = window["width"] as? Int ?? 0
+        let height = window["height"] as? Int ?? 0
+        let size = "\(width)x\(height)"
+        let app = truncate(window["app"] as? String ?? "", to: 26)
+        let title = truncate(window["title"] as? String ?? "", to: 60)
+        writeString("\(pad(id, 8))  \(pad(pid, 8))  \(pad(screen, 6))  \(pad(size, 10))  \(pad(app, 26))  \(title)\n")
+    }
+
+    if capturable.count > 80 {
+        writeString("… \(capturable.count - 80) more likely capturable windows omitted; use --json for complete output.\n")
+    }
+}
+
+func pad(_ value: String, _ width: Int) -> String {
+    if value.count >= width { return value }
+    return value + String(repeating: " ", count: width - value.count)
+}
+
+func truncate(_ value: String, to maxLength: Int) -> String {
+    if value.count <= maxLength { return value }
+    return String(value.prefix(maxLength - 1)) + "…"
 }
 
 func filteredWindows(_ windows: [SCWindow], appName: String?, titleSubstring: String) -> [SCWindow] {

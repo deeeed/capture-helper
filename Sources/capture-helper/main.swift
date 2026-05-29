@@ -65,7 +65,7 @@ case .permissions:
 case .list:
     Task {
         do {
-            try await listAllWindows(jsonLines: config.legacyJsonLines)
+            try await listAllWindows(jsonLines: config.legacyJsonLines, human: !config.json)
             exit(0)
         } catch {
             logError(error)
@@ -74,12 +74,16 @@ case .list:
     }
     dispatchMain()
 case .record:
-    do {
-        try runRecord(config)
-    } catch {
-        logError(error)
-        exit(1)
+    Task {
+        do {
+            try await runRecord(config)
+            exit(0)
+        } catch {
+            logError(error)
+            exit(1)
+        }
     }
+    dispatchMain()
 case .resolve:
     Task {
         do {
