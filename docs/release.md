@@ -19,9 +19,9 @@ npm pack --dry-run
 ## Tag release
 
 ```bash
-git tag -a v0.1.1 -m "v0.1.1"
+git tag -a v0.1.2 -m "v0.1.2"
 git push origin main
-git push origin v0.1.1
+git push origin v0.1.2
 ```
 
 The release workflow builds a macOS arm64 binary, attaches it to the GitHub release, and publishes the npm package.
@@ -29,7 +29,7 @@ The release workflow builds a macOS arm64 binary, attaches it to the GitHub rele
 ## Verify release
 
 ```bash
-gh release view v0.1.1 --repo deeeed/capture-helper
+gh release view v0.1.2 --repo deeeed/capture-helper
 npm dist-tag ls @siteed/capture-helper
 npm install -g @siteed/capture-helper@latest
 capture-helper version

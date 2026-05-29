@@ -18,7 +18,7 @@ func runRecord(_ config: Config) throws -> Never {
         try fm.createDirectory(atPath: outputDir, withIntermediateDirectories: true)
     }
 
-    let executable = CommandLine.arguments[0]
+    let executable = currentExecutablePath()
     var captureArgs: [String] = ["capture", "--max-fps", "\(config.maxFps)", "--max-size", "\(config.maxSize)"]
     if let duration = config.durationSeconds {
         captureArgs += ["--duration", "\(duration)"]

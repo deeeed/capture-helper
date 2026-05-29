@@ -23,4 +23,4 @@ brew tap deeeed/tap
 brew install capture-helper
 ```
 
-The current formula is arm64-only and points at the GitHub release binary for `v0.1.1`. Update both `url` and `sha256` for every release.
+The current formula is arm64-only and points at the GitHub release binary for the current package version. Update `version`, `url`, and `sha256` for every release.

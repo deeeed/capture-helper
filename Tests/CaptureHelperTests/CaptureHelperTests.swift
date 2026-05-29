@@ -14,9 +14,29 @@ final class CaptureHelperTests: XCTestCase {
         let object = try parseJSONObject(result.stdout)
         XCTAssertEqual(object["name"] as? String, "@siteed/capture-helper")
         XCTAssertEqual(object["binary"] as? String, "capture-helper")
-        XCTAssertEqual(object["version"] as? String, "0.1.1")
+        XCTAssertEqual(object["version"] as? String, "0.1.2")
         XCTAssertNotNil(object["architecture"])
         XCTAssertNotNil(object["osVersion"])
+    }
+
+    func testDoctorResolvesExecutableWhenInvokedFromPath() throws {
+        let helper = helperURL()
+        let result = try runCommand(
+            executableURL: URL(fileURLWithPath: "/usr/bin/env"),
+            arguments: ["capture-helper", "doctor", "--json"],
+            environment: [
+                "PATH": helper.deletingLastPathComponent().path + ":" + (ProcessInfo.processInfo.environment["PATH"] ?? "")
+            ]
+        )
+
+        let object = try parseJSONObject(result.stdout)
+        let checks = try XCTUnwrap(object["checks"] as? [[String: Any]])
+        let nativeBinary = try XCTUnwrap(checks.first { ($0["id"] as? String) == "native_binary" })
+        XCTAssertEqual(nativeBinary["ok"] as? Bool, true)
+        XCTAssertEqual(nativeBinary["code"] as? String, "native_binary_present")
+        let value = try XCTUnwrap(nativeBinary["value"] as? String)
+        XCTAssertTrue(value.hasPrefix("/"), value)
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: value), value)
     }
 
 
@@ -110,9 +130,18 @@ final class CaptureHelperTests: XCTestCase {
     }
 
     private func runHelper(_ arguments: [String]) throws -> CommandResult {
+        try runCommand(executableURL: helperURL(), arguments: arguments)
+    }
+
+    private func runCommand(
+        executableURL: URL,
+        arguments: [String],
+        environment: [String: String]? = nil
+    ) throws -> CommandResult {
         let process = Process()
-        process.executableURL = helperURL()
+        process.executableURL = executableURL
         process.arguments = arguments
+        process.environment = environment
 
         let stdout = Pipe()
         let stderr = Pipe()

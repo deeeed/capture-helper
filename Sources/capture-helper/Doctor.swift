@@ -80,7 +80,7 @@ func doctorChecks() async -> [DoctorCheck] {
         details: ["minimum": "13.0"]
     ))
 
-    let binaryPath = CommandLine.arguments[0]
+    let binaryPath = currentExecutablePath()
     let binaryOk = FileManager.default.isExecutableFile(atPath: binaryPath)
     checks.append(DoctorCheck(
         id: "native_binary",
