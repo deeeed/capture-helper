@@ -2,7 +2,7 @@
   "name": "@siteed/capture-helper",
   "version": "0.1.0",
   "description": "Generic macOS ScreenCaptureKit CLI for window discovery, capture, recording, and agent evidence streams.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": false,
   "bin": {
     "capture-helper": "bin/capture-helper.js"
