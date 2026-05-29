@@ -3,7 +3,7 @@ import Foundation
 enum BuildInfo {
     static let name = "@siteed/capture-helper"
     static let binaryName = "capture-helper"
-    static let version = "0.1.3"
+    static let version = "0.1.4"
 
     static var architecture: String {
         #if arch(arm64)

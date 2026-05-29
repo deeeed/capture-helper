@@ -60,6 +60,8 @@ case .doctor:
         exit(0)
     }
     dispatchMain()
+case .permissions:
+    runPermissionsCommand(config)
 case .list:
     Task {
         do {

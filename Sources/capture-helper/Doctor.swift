@@ -44,13 +44,16 @@ struct DoctorCheck {
 func runDoctor(json: Bool) async {
     let checks = await doctorChecks()
     let ok = checks.allSatisfy { $0.ok || !$0.required }
-    let result: [String: Any] = [
+    var result: [String: Any] = [
         "type": "doctor",
         "ok": ok,
         "build": BuildInfo.object(),
         "checks": checks.map { $0.object() },
         "summary": doctorSummary(checks)
     ]
+    if Runtime.config.openPermissions && checks.contains(where: { $0.code == DoctorCode.screenRecordingDenied }) {
+        result["permissions"] = runPermissionsWorkflow(request: true, openSettings: true).object()
+    }
 
     if json {
         emitJSONObject(result)

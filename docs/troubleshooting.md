@@ -7,7 +7,7 @@ This means macOS Screen Recording permission is denied for the app that launched
 Open the permission pane:
 
 ```bash
-open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+capture-helper permissions
 ```
 
 Then grant permission based on how the helper is launched:
@@ -19,7 +19,7 @@ If macOS is stuck on a previous denial, reset the Screen Recording decision and 
 
 ```bash
 tccutil reset ScreenCapture
-capture-helper doctor --json
+capture-helper permissions
 ```
 
 After changing the permission, restart the launching app or SSH session and run:

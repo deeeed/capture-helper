@@ -68,6 +68,10 @@ capture-helper --version
 capture-helper doctor --json
 # includes stable codes like screen_recording_denied, window_server_unavailable, ffmpeg_missing
 
+# Request/open macOS Screen Recording permissions where possible
+capture-helper permissions
+capture-helper doctor --open-permissions --json
+
 # List windows as a machine-readable JSON object
 capture-helper list --json
 

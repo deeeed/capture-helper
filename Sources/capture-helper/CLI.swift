@@ -7,6 +7,7 @@ enum CommandMode: Equatable {
     case record
     case resolve
     case snapshot
+    case permissions
     case version
 }
 
@@ -24,6 +25,8 @@ struct Config {
     var outputPath: String? = nil
     var durationSeconds: Double? = nil
     var ffmpegPath: String? = nil
+    var openPermissions = false
+    var requestPermissions = false
 }
 
 enum Runtime {
@@ -50,6 +53,11 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
             cfg.command = .resolve; i += 1
         case "snapshot":
             cfg.command = .snapshot; i += 1
+        case "permissions":
+            cfg.command = .permissions
+            cfg.openPermissions = true
+            cfg.requestPermissions = true
+            i += 1
         case "version":
             cfg.command = .version; i += 1
         default:
@@ -89,6 +97,13 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
         case "--ffmpeg":
             i += 1; guard i < args.count else { exitUsage() }
             cfg.ffmpegPath = args[i]
+        case "--open-permissions":
+            cfg.openPermissions = true
+        case "--request-permission", "--request-permissions":
+            cfg.requestPermissions = true
+        case "--status-only":
+            cfg.openPermissions = false
+            cfg.requestPermissions = false
         case "--framed":
             cfg.framed = true
         case "--json":
@@ -123,7 +138,8 @@ func exitUsage() -> Never {
       capture-helper resolve [target options] [--json]
       capture-helper snapshot [target options] --output PATH
       capture-helper list [--json | --json-lines]
-      capture-helper doctor [--json]
+      capture-helper doctor [--json] [--open-permissions]
+      capture-helper permissions [--status-only | --open-permissions] [--request-permission]
       capture-helper version
 
     Legacy usage remains supported:
@@ -146,6 +162,11 @@ func exitUsage() -> Never {
       --output, -o <path>     MP4 output path for record, image path for snapshot
       --duration <seconds>    Stop automatically after duration
       --ffmpeg <path>         Explicit ffmpeg path
+
+    Permission options:
+      --open-permissions      Open the macOS Screen Recording permission pane
+      --request-permission    Ask macOS to prompt for Screen Recording when possible
+      --status-only           Only report permission state; do not request/open
 
     Framed stdin commands:
       +name <substring>       Add window by title substring

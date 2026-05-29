@@ -14,7 +14,7 @@ final class CaptureHelperTests: XCTestCase {
         let object = try parseJSONObject(result.stdout)
         XCTAssertEqual(object["name"] as? String, "@siteed/capture-helper")
         XCTAssertEqual(object["binary"] as? String, "capture-helper")
-        XCTAssertEqual(object["version"] as? String, "0.1.3")
+        XCTAssertEqual(object["version"] as? String, "0.1.4")
         XCTAssertNotNil(object["architecture"])
         XCTAssertNotNil(object["osVersion"])
     }
@@ -97,6 +97,21 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertEqual(result.status, 0)
         XCTAssertTrue(result.stderr.contains("capture-helper resolve"), result.stderr)
         XCTAssertTrue(result.stderr.contains("capture-helper snapshot"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("capture-helper permissions"), result.stderr)
+    }
+
+    func testPermissionsStatusOnlyProducesJSON() throws {
+        let result = try runHelper(["permissions", "--status-only"])
+
+        let object = try parseJSONObject(result.stdout)
+        XCTAssertEqual(object["type"] as? String, "permissions")
+        XCTAssertEqual(object["permission"] as? String, "screen_recording")
+        XCTAssertNotNil(object["grantedBefore"])
+        XCTAssertEqual(object["requestAttempted"] as? Bool, false)
+        XCTAssertEqual(object["settingsOpenAttempted"] as? Bool, false)
+        XCTAssertNotNil(object["grantedAfter"])
+        XCTAssertNotNil(object["launcher"])
+        XCTAssertNotNil(object["remediation"])
     }
 
     func testResolveWithoutTargetFailsWithStableErrorCode() throws {
