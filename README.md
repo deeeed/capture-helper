@@ -77,6 +77,8 @@ capture-helper list --json
 
 # Human-readable table
 capture-helper list --human
+capture-helper -l
+capture-helper list -h
 
 # Legacy JSON-lines listing
 capture-helper --list-windows

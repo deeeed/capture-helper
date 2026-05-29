@@ -33,6 +33,14 @@ Lists macOS windows.
 capture-helper list --json
 ```
 
+Human-readable shortcuts:
+
+```bash
+capture-helper list --human
+capture-helper list -h
+capture-helper -l
+```
+
 Default output is a JSON object:
 
 ```json

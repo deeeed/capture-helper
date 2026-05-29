@@ -1,6 +1,6 @@
 {
   "name": "@siteed/capture-helper",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Generic macOS ScreenCaptureKit CLI for window discovery, capture, recording, and agent evidence streams.",
   "license": "MIT",
   "private": false,

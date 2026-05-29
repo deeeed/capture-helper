@@ -45,6 +45,10 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
             cfg.command = .capture; cfg.framed = true; i += 1
         case "list", "windows":
             cfg.command = .list; i += 1
+        case "-l":
+            cfg.command = .list
+            cfg.json = false
+            i += 1
         case "doctor":
             cfg.command = .doctor; i += 1
         case "record":
@@ -108,10 +112,15 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
             cfg.framed = true
         case "--json":
             cfg.json = true
-        case "--human", "--text":
+        case "--human", "--text", "-H":
+            cfg.json = false
+        case "-h" where supportsHumanOutput(cfg.command):
             cfg.json = false
         case "--json-lines", "--jsonl":
             cfg.legacyJsonLines = true
+        case "-l":
+            cfg.command = .list
+            cfg.json = false
         case "--list-windows":
             cfg.command = .list
             cfg.legacyJsonLines = true
@@ -140,6 +149,7 @@ func exitUsage() -> Never {
       capture-helper resolve [target options] [--json]
       capture-helper snapshot [target options] --output PATH
       capture-helper list [--json | --json-lines]
+      capture-helper -l
       capture-helper doctor [--json] [--open-permissions]
       capture-helper permissions [--status-only | --open-permissions] [--request-permission]
       capture-helper version
@@ -172,7 +182,9 @@ func exitUsage() -> Never {
 
     Output options:
       --json                  Machine-readable JSON output (default)
-      --human, --text         Human-readable output for supported commands
+      --human, --text, -H     Human-readable output for supported commands
+      -h                      Human output after list/doctor/permissions/version; help otherwise
+      -l                      Shortcut for `list --human`
       --json-lines, --jsonl   JSON-lines output for list
 
     Framed stdin commands:
@@ -184,4 +196,13 @@ func exitUsage() -> Never {
     """
     writeString(usage, toStderr: true)
     exit(0)
+}
+
+func supportsHumanOutput(_ command: CommandMode) -> Bool {
+    switch command {
+    case .list, .doctor, .permissions, .version:
+        return true
+    case .capture, .record, .resolve, .snapshot:
+        return false
+    }
 }
