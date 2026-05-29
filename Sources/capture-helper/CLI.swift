@@ -5,6 +5,8 @@ enum CommandMode: Equatable {
     case list
     case doctor
     case record
+    case resolve
+    case snapshot
     case version
 }
 
@@ -44,6 +46,10 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
             cfg.command = .doctor; i += 1
         case "record":
             cfg.command = .record; i += 1
+        case "resolve":
+            cfg.command = .resolve; i += 1
+        case "snapshot":
+            cfg.command = .snapshot; i += 1
         case "version":
             cfg.command = .version; i += 1
         default:
@@ -114,6 +120,8 @@ func exitUsage() -> Never {
       capture-helper capture [target options] [--max-fps N] [--max-size N]
       capture-helper stream [target options] [--framed]
       capture-helper record [target options] --output PATH [--duration seconds]
+      capture-helper resolve [target options] [--json]
+      capture-helper snapshot [target options] --output PATH
       capture-helper list [--json | --json-lines]
       capture-helper doctor [--json]
       capture-helper version
@@ -134,8 +142,8 @@ func exitUsage() -> Never {
       --max-size <int>        Max dimension in pixels (default: 720)
       --framed                Framed output with stdin commands
 
-    Record options:
-      --output, -o <path>     MP4 output path
+    Record/snapshot options:
+      --output, -o <path>     MP4 output path for record, image path for snapshot
       --duration <seconds>    Stop automatically after duration
       --ffmpeg <path>         Explicit ffmpeg path
 

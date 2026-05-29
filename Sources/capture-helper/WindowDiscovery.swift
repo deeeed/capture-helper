@@ -79,46 +79,20 @@ func availableTitles(_ windows: [SCWindow], appName: String?) -> String {
 }
 
 func findWindowByName(_ name: String, appName: String? = nil) async throws -> SCWindow {
-    let onScreenWindows = try await loadWindows(onScreenOnly: true)
-    let onScreenMatches = filteredWindows(onScreenWindows, appName: appName, titleSubstring: name)
-    if let window = onScreenMatches.first { return window }
-
-    let allWindows = try await loadWindows(onScreenOnly: false)
-    let fallbackMatches = filteredWindows(allWindows, appName: appName, titleSubstring: name)
-    if let window = fallbackMatches.first {
-        log("info", "falling back to off-screen window lookup for \(appName ?? "any-app")/\(name)")
-        return window
-    }
-
-    let appLabel = appName ?? "any app"
-    let visible = availableTitles(onScreenWindows, appName: appName)
-    let all = availableTitles(allWindows, appName: appName)
-    throw CaptureError.windowNotFound(
-        "no window matching '\(name)' in \(appLabel) (visible: \(visible); all: \(all))"
-    )
+    var config = Config()
+    config.initialNames = [name]
+    config.initialAppName = appName
+    return try await resolveTarget(config).window
 }
 
 func findWindowByPid(_ pid: pid_t) async throws -> SCWindow {
-    let windows = try await loadWindows(onScreenOnly: false).filter { window in
-        guard window.owningApplication?.processID == pid else { return false }
-        guard window.frame.width > 100 && window.frame.height > 100 else { return false }
-        guard window.windowLayer == 0 else { return false }
-        let ratio = window.frame.width / max(window.frame.height, 1)
-        return ratio < 10
-    }
-    let sorted = windows.sorted { a, b in
-        (a.frame.width * a.frame.height) > (b.frame.width * b.frame.height)
-    }
-    guard let window = sorted.first else {
-        throw CaptureError.windowNotFound("no window found for PID \(pid)")
-    }
-    return window
+    var config = Config()
+    config.initialPid = pid
+    return try await resolveTarget(config).window
 }
 
 func findWindowById(_ id: UInt32) async throws -> SCWindow {
-    let allWindows = try await loadWindows(onScreenOnly: false)
-    guard let window = allWindows.first(where: { UInt32($0.windowID) == id }) else {
-        throw CaptureError.windowNotFound("no window found for id \(id)")
-    }
-    return window
+    var config = Config()
+    config.initialWindowId = id
+    return try await resolveTarget(config).window
 }

@@ -63,6 +63,37 @@ capture-helper list --json-lines
 capture-helper --list-windows
 ```
 
+### `resolve`
+
+Resolves target selectors without capturing. Output is JSON on stdout:
+
+```bash
+capture-helper resolve --app-name Simulator --window-name "mm-1"
+capture-helper resolve --window-id 12345
+```
+
+Example shape:
+
+```json
+{
+  "type": "resolve",
+  "selector": "app-name+window-name",
+  "candidateCount": 2,
+  "selected": { "id": 12345, "title": "mm-1", "app": "Simulator" },
+  "candidates": []
+}
+```
+
+### `snapshot`
+
+Captures a one-frame PNG using the resolved window id. Output is JSON on stdout; image bytes are written to `--output`.
+
+```bash
+capture-helper snapshot --window-id 12345 --output screenshot.png
+```
+
+`snapshot` uses macOS `/usr/sbin/screencapture` after resolving the target.
+
 ### `capture`
 
 Writes one raw H.264 Annex B stream to stdout.

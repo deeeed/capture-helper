@@ -21,6 +21,22 @@ CAPTURE_HELPER_PATH=$HOME/dev/@siteed/capture-helper/native/capture-helper \
   bash scripts/record-window.sh --pid 12345 --output /tmp/evidence.mp4
 ```
 
+Use `resolve` to debug Farmslot resource-to-window mapping before opening a stream:
+
+```bash
+~/dev/@siteed/capture-helper/native/capture-helper resolve \
+  --app-name Simulator \
+  --window-name mm-1
+```
+
+Use `snapshot` when a recipe needs a lightweight still image instead of video:
+
+```bash
+~/dev/@siteed/capture-helper/native/capture-helper snapshot \
+  --window-id 12345 \
+  --output /tmp/evidence.png
+```
+
 Standalone MP4 recording is also available:
 
 ```bash

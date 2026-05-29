@@ -67,6 +67,22 @@ capture-helper stream --framed --window-id 12345 > /tmp/windows.h264
 capture-helper record --window-id 12345 --duration 5 --output evidence.mp4
 ```
 
+## Resolve and snapshot
+
+`resolve` lets agents debug target selection before starting video capture:
+
+```bash
+capture-helper resolve --app-name "Google Chrome" --window-name "MetaMask"
+```
+
+It returns the selected window, selector type, and all candidates considered for that selector.
+
+`snapshot` captures a one-frame PNG using the same target selectors:
+
+```bash
+capture-helper snapshot --window-id 12345 --output screenshot.png
+```
+
 ## Target selectors
 
 Prefer selectors in this order:

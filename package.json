@@ -24,7 +24,9 @@
     "test": "swift test",
     "pack:dry-run": "npm pack --dry-run",
     "record:smoke": "node bin/capture-helper.js record --duration 1 --output /tmp/capture-helper-smoke.mp4 --help",
-    "postinstall": "node scripts/postinstall.js"
+    "postinstall": "node scripts/postinstall.js",
+    "resolve:smoke": "node bin/capture-helper.js resolve --window-id 1 || true",
+    "snapshot:smoke": "node bin/capture-helper.js snapshot --window-id 1 --output /tmp/capture-helper-smoke.png || true"
   },
   "keywords": [
     "macos",

@@ -78,6 +78,28 @@ case .record:
         log("error", "\(error)")
         exit(1)
     }
+case .resolve:
+    Task {
+        do {
+            try await printResolvedTarget(config)
+            exit(0)
+        } catch {
+            log("error", "\(error)")
+            exit(1)
+        }
+    }
+    dispatchMain()
+case .snapshot:
+    Task {
+        do {
+            try await runSnapshot(config)
+            exit(0)
+        } catch {
+            log("error", "\(error)")
+            exit(1)
+        }
+    }
+    dispatchMain()
 case .capture:
     installSignalHandlers()
     Task {
