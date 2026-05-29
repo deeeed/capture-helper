@@ -60,6 +60,10 @@ When installed as an npm package, `postinstall` attempts to build the native Swi
 ## Commands
 
 ```bash
+# Human default: list likely capturable windows
+capture-helper
+capture-helper -l
+
 # Version / provenance
 capture-helper version
 capture-helper --version
@@ -79,6 +83,7 @@ capture-helper list --json
 capture-helper list --human
 capture-helper -l
 capture-helper list -h
+capture-helper list --on-screen --capturable --human
 
 # Legacy JSON-lines listing
 capture-helper --list-windows
@@ -96,7 +101,7 @@ capture-helper --window-name "Simulator" > /tmp/capture.h264
 capture-helper stream --framed --window-id 12345 > /tmp/windows.h264
 
 # Record MP4 evidence without ffmpeg
-capture-helper record --window-id 12345 --duration 5 --output evidence.mp4
+capture-helper record --window-id 12345 --duration 5 --output evidence.mp4 --open
 ```
 
 ## Resolve and snapshot

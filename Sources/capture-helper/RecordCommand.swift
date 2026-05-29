@@ -60,6 +60,9 @@ func runRecord(_ config: Config) async throws {
     )
 
     try await stream.startCapture()
+    if config.durationSeconds == nil {
+        logEvent(("type", "record_waiting"), ("message", "Recording; press Ctrl-C to stop"))
+    }
     await waitForRecordStop(duration: config.durationSeconds)
     try await stopStream(stream)
     try await delegate.finish()
@@ -76,6 +79,10 @@ func runRecord(_ config: Config) async throws {
         ("frames", delegate.writtenFrames),
         ("bytes", size)
     )
+
+    if config.openOutput {
+        _ = openFile(path: outputPath)
+    }
 }
 
 private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
@@ -188,7 +195,7 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
 
         guard didStartWriting else {
             writer.cancelWriting()
-            throw CaptureError.recordFailed("recording finished before any frames were captured")
+            throw CaptureError.recordFailed("recording finished before any frames were captured. The window may be minimized, hidden, offscreen, fully occluded, or not refreshing. Try `capture-helper list --on-screen --human` and select an on-screen window.")
         }
         guard !didFinish else { return }
         didFinish = true
@@ -205,6 +212,20 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
                 }
             }
         }
+    }
+}
+
+func openFile(path: String) -> Bool {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    process.arguments = [path]
+    do {
+        try process.run()
+        process.waitUntilExit()
+        return process.terminationStatus == 0
+    } catch {
+        logErrorMessage(code: "open_output_failed", message: "failed to open output: \(error)")
+        return false
     }
 }
 

@@ -30,6 +30,7 @@ Current checks include:
 Lists macOS windows.
 
 ```bash
+capture-helper
 capture-helper list --json
 ```
 
@@ -39,6 +40,7 @@ Human-readable shortcuts:
 capture-helper list --human
 capture-helper list -h
 capture-helper -l
+capture-helper list --on-screen --capturable --human
 ```
 
 Default output is a JSON object:

@@ -27,6 +27,9 @@ struct Config {
     var ffmpegPath: String? = nil
     var openPermissions = false
     var requestPermissions = false
+    var openOutput = false
+    var listOnScreenOnly = false
+    var listCapturableOnly = false
 }
 
 enum Runtime {
@@ -35,35 +38,40 @@ enum Runtime {
 
 func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
     var cfg = Config()
+    var sawCommand = false
     var i = 1
 
     if i < args.count {
         switch args[i] {
         case "capture":
-            cfg.command = .capture; i += 1
+            cfg.command = .capture; sawCommand = true; i += 1
         case "stream":
-            cfg.command = .capture; cfg.framed = true; i += 1
+            cfg.command = .capture; cfg.framed = true; sawCommand = true; i += 1
         case "list", "windows":
-            cfg.command = .list; i += 1
+            cfg.command = .list; sawCommand = true; i += 1
         case "-l":
             cfg.command = .list
             cfg.json = false
+            sawCommand = true
             i += 1
         case "doctor":
-            cfg.command = .doctor; i += 1
+            cfg.command = .doctor; sawCommand = true; i += 1
         case "record":
-            cfg.command = .record; i += 1
+            cfg.command = .record; sawCommand = true; i += 1
         case "resolve":
-            cfg.command = .resolve; i += 1
+            cfg.command = .resolve; sawCommand = true; i += 1
         case "snapshot":
-            cfg.command = .snapshot; i += 1
+            cfg.command = .snapshot; sawCommand = true; i += 1
         case "permissions":
             cfg.command = .permissions
             cfg.openPermissions = true
             cfg.requestPermissions = true
+            sawCommand = true
             i += 1
         case "version":
-            cfg.command = .version; i += 1
+            cfg.command = .version; sawCommand = true; i += 1
+        case "help":
+            exitUsage()
         default:
             break
         }
@@ -71,13 +79,13 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
 
     while i < args.count {
         switch args[i] {
-        case "--window-name":
+        case "--window-name", "--name":
             i += 1; guard i < args.count else { exitUsage() }
             cfg.initialNames.append(args[i])
         case "--window-names":
             i += 1; guard i < args.count else { exitUsage() }
             cfg.initialNames += args[i].split(separator: ",").map(String.init)
-        case "--app-name":
+        case "--app-name", "--app":
             i += 1; guard i < args.count else { exitUsage() }
             cfg.initialAppName = args[i]
         case "--pid":
@@ -101,6 +109,12 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
         case "--ffmpeg":
             i += 1; guard i < args.count else { exitUsage() }
             cfg.ffmpegPath = args[i]
+        case "--open":
+            cfg.openOutput = true
+        case "--on-screen":
+            cfg.listOnScreenOnly = true
+        case "--capturable":
+            cfg.listCapturableOnly = true
         case "--open-permissions":
             cfg.openPermissions = true
         case "--request-permission", "--request-permissions":
@@ -124,6 +138,7 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
         case "--list-windows":
             cfg.command = .list
             cfg.legacyJsonLines = true
+            sawCommand = true
         case "--version", "-v":
             cfg.command = .version
         case "--help", "-h":
@@ -135,6 +150,13 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
         i += 1
     }
 
+    if !sawCommand && cfg.command == .capture && cfg.initialWindowId == nil && cfg.initialPid == nil && cfg.initialNames.isEmpty {
+        cfg.command = .list
+        if args.count == 1 {
+            cfg.json = false
+        }
+    }
+
     return cfg
 }
 
@@ -143,6 +165,8 @@ func exitUsage() -> Never {
     capture-helper — macOS window capture for agents and automation
 
     Usage:
+      capture-helper
+      capture-helper help
       capture-helper capture [target options] [--max-fps N] [--max-size N]
       capture-helper stream [target options] [--framed]
       capture-helper record [target options] --output PATH [--duration seconds]
@@ -161,8 +185,10 @@ func exitUsage() -> Never {
     Target options:
       --window-id <id>        Capture exact macOS window id from `list`
       --window-name <string>  Window title substring. Can repeat.
+      --name <string>         Alias for --window-name.
       --window-names <a,b>    Comma-separated window title substrings.
       --app-name <string>     Restrict title matching to exact app name.
+      --app <string>          Alias for --app-name.
       --pid <int>             Capture largest suitable window owned by PID.
 
     Capture options:
@@ -174,6 +200,11 @@ func exitUsage() -> Never {
       --output, -o <path>     MP4 output path for record, image path for snapshot
       --duration <seconds>    Stop automatically after duration
       --ffmpeg <path>         Check an explicit ffmpeg path in doctor output
+      --open                  Open the MP4/image after record or snapshot
+
+    List filters:
+      --on-screen             Show only currently on-screen windows
+      --capturable            Show only likely capturable application windows
 
     Permission options:
       --open-permissions      Open the macOS Screen Recording permission pane

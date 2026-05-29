@@ -52,7 +52,7 @@ func allWindowObjects() async throws -> [[String: Any]] {
 }
 
 func listAllWindows(jsonLines: Bool, human: Bool = false) async throws {
-    let windows = try await allWindowObjects()
+    let windows = filterWindowObjects(try await allWindowObjects())
     if human {
         printWindowTable(windows)
     } else if jsonLines {
@@ -64,13 +64,38 @@ func listAllWindows(jsonLines: Bool, human: Bool = false) async throws {
     }
 }
 
+func filterWindowObjects(_ windows: [[String: Any]]) -> [[String: Any]] {
+    windows.filter { window in
+        if Runtime.config.listOnScreenOnly && (window["onScreen"] as? Bool) != true {
+            return false
+        }
+        if Runtime.config.listCapturableOnly && !isLikelyCapturable(window) {
+            return false
+        }
+        if let appName = Runtime.config.initialAppName, (window["app"] as? String) != appName {
+            return false
+        }
+        if !Runtime.config.initialNames.isEmpty {
+            let title = window["title"] as? String ?? ""
+            if !Runtime.config.initialNames.contains(where: { title.localizedCaseInsensitiveContains($0) }) {
+                return false
+            }
+        }
+        return true
+    }
+}
+
+func isLikelyCapturable(_ window: [String: Any]) -> Bool {
+    let width = window["width"] as? Int ?? 0
+    let height = window["height"] as? Int ?? 0
+    let layer = window["layer"] as? Int ?? Int.max
+    let ratio = Double(width) / Double(max(height, 1))
+    return width > 100 && height > 100 && layer == 0 && ratio < 10
+}
+
 func printWindowTable(_ windows: [[String: Any]]) {
     let capturable = windows.filter { window in
-        let width = window["width"] as? Int ?? 0
-        let height = window["height"] as? Int ?? 0
-        let layer = window["layer"] as? Int ?? Int.max
-        let ratio = Double(width) / Double(max(height, 1))
-        return width > 100 && height > 100 && layer == 0 && ratio < 10
+        isLikelyCapturable(window)
     }.sorted { lhs, rhs in
         let lhsOnScreen = lhs["onScreen"] as? Bool ?? false
         let rhsOnScreen = rhs["onScreen"] as? Bool ?? false
@@ -99,6 +124,8 @@ func printWindowTable(_ windows: [[String: Any]]) {
     if capturable.count > 80 {
         writeString("… \(capturable.count - 80) more likely capturable windows omitted; use --json for complete output.\n")
     }
+    writeString("\nTips: capture-helper record --window-id <ID> --duration 5 -o evidence.mp4 --open\n")
+    writeString("      capture-helper --help for all commands and selectors.\n")
 }
 
 func pad(_ value: String, _ width: Int) -> String {

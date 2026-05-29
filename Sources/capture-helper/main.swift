@@ -99,6 +99,9 @@ case .snapshot:
     Task {
         do {
             try await runSnapshot(config)
+            if config.openOutput, let outputPath = config.outputPath {
+                _ = openFile(path: outputPath)
+            }
             exit(0)
         } catch {
             logError(error)
