@@ -1,0 +1,50 @@
+{
+  "name": "@siteed/capture-helper",
+  "version": "0.1.0",
+  "description": "Generic macOS ScreenCaptureKit CLI for window discovery, capture, recording, and agent evidence streams.",
+  "license": "UNLICENSED",
+  "private": false,
+  "bin": {
+    "capture-helper": "bin/capture-helper.js"
+  },
+  "files": [
+    "bin/",
+    "native/",
+    "Sources/",
+    "Package.swift",
+    "README.md",
+    "docs/",
+    "scripts/"
+  ],
+  "scripts": {
+    "build:native": "bash scripts/build.sh",
+    "doctor": "node bin/capture-helper.js --help",
+    "list": "node bin/capture-helper.js --list-windows",
+    "test": "swift test"
+  },
+  "keywords": [
+    "macos",
+    "screencapturekit",
+    "screen-capture",
+    "window-capture",
+    "agent",
+    "evidence"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/siteed/capture-helper.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64",
+    "x64"
+  ]
+}

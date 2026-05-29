@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
+node_modules/
+npm-debug.log*
+yarn-error.log*
+*.h264
+*.mp4
+native/
