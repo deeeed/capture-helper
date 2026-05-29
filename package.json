@@ -41,7 +41,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/siteed/capture-helper.git"
+    "url": "git+https://github.com/deeeed/capture-helper.git"
   },
   "publishConfig": {
     "access": "public"
@@ -52,5 +52,9 @@
   "cpu": [
     "arm64",
     "x64"
-  ]
+  ],
+  "bugs": {
+    "url": "https://github.com/deeeed/capture-helper/issues"
+  },
+  "homepage": "https://github.com/deeeed/capture-helper#readme"
 }
