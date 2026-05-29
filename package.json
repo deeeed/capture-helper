@@ -18,9 +18,13 @@
   ],
   "scripts": {
     "build:native": "bash scripts/build.sh",
-    "doctor": "node bin/capture-helper.js --help",
-    "list": "node bin/capture-helper.js --list-windows",
-    "test": "swift test"
+    "doctor": "node bin/capture-helper.js doctor --json",
+    "list": "node bin/capture-helper.js list --json",
+    "version:helper": "node bin/capture-helper.js version",
+    "test": "swift test",
+    "pack:dry-run": "npm pack --dry-run",
+    "record:smoke": "node bin/capture-helper.js record --duration 1 --output /tmp/capture-helper-smoke.mp4 --help",
+    "postinstall": "node scripts/postinstall.js"
   },
   "keywords": [
     "macos",

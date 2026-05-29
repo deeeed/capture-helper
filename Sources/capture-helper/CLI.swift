@@ -1,0 +1,151 @@
+import Foundation
+
+enum CommandMode: Equatable {
+    case capture
+    case list
+    case doctor
+    case record
+    case version
+}
+
+struct Config {
+    var command: CommandMode = .capture
+    var initialNames: [String] = []
+    var initialAppName: String? = nil
+    var initialPid: pid_t? = nil
+    var initialWindowId: UInt32? = nil
+    var maxFps: Int32 = 15
+    var maxSize: Int = 720
+    var framed = false
+    var json = true
+    var legacyJsonLines = false
+    var outputPath: String? = nil
+    var durationSeconds: Double? = nil
+    var ffmpegPath: String? = nil
+}
+
+enum Runtime {
+    static var config = Config()
+}
+
+func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
+    var cfg = Config()
+    var i = 1
+
+    if i < args.count {
+        switch args[i] {
+        case "capture":
+            cfg.command = .capture; i += 1
+        case "stream":
+            cfg.command = .capture; cfg.framed = true; i += 1
+        case "list", "windows":
+            cfg.command = .list; i += 1
+        case "doctor":
+            cfg.command = .doctor; i += 1
+        case "record":
+            cfg.command = .record; i += 1
+        case "version":
+            cfg.command = .version; i += 1
+        default:
+            break
+        }
+    }
+
+    while i < args.count {
+        switch args[i] {
+        case "--window-name":
+            i += 1; guard i < args.count else { exitUsage() }
+            cfg.initialNames.append(args[i])
+        case "--window-names":
+            i += 1; guard i < args.count else { exitUsage() }
+            cfg.initialNames += args[i].split(separator: ",").map(String.init)
+        case "--app-name":
+            i += 1; guard i < args.count else { exitUsage() }
+            cfg.initialAppName = args[i]
+        case "--pid":
+            i += 1; guard i < args.count, let value = Int32(args[i]) else { exitUsage() }
+            cfg.initialPid = value
+        case "--window-id":
+            i += 1; guard i < args.count, let value = UInt32(args[i]) else { exitUsage() }
+            cfg.initialWindowId = value
+        case "--max-fps":
+            i += 1; guard i < args.count, let value = Int32(args[i]), value > 0 else { exitUsage() }
+            cfg.maxFps = value
+        case "--max-size":
+            i += 1; guard i < args.count, let value = Int(args[i]), value > 0 else { exitUsage() }
+            cfg.maxSize = value
+        case "--output", "-o":
+            i += 1; guard i < args.count else { exitUsage() }
+            cfg.outputPath = args[i]
+        case "--duration":
+            i += 1; guard i < args.count, let value = Double(args[i]), value > 0 else { exitUsage() }
+            cfg.durationSeconds = value
+        case "--ffmpeg":
+            i += 1; guard i < args.count else { exitUsage() }
+            cfg.ffmpegPath = args[i]
+        case "--framed":
+            cfg.framed = true
+        case "--json":
+            cfg.json = true
+        case "--json-lines", "--jsonl":
+            cfg.legacyJsonLines = true
+        case "--list-windows":
+            cfg.command = .list
+            cfg.legacyJsonLines = true
+        case "--version", "-v":
+            cfg.command = .version
+        case "--help", "-h":
+            exitUsage()
+        default:
+            writeString("unknown argument: \(args[i])\n", toStderr: true)
+            exitUsage()
+        }
+        i += 1
+    }
+
+    return cfg
+}
+
+func exitUsage() -> Never {
+    let usage = """
+    capture-helper — macOS window capture for agents and automation
+
+    Usage:
+      capture-helper capture [target options] [--max-fps N] [--max-size N]
+      capture-helper stream [target options] [--framed]
+      capture-helper record [target options] --output PATH [--duration seconds]
+      capture-helper list [--json | --json-lines]
+      capture-helper doctor [--json]
+      capture-helper version
+
+    Legacy usage remains supported:
+      capture-helper --window-name <string> > /tmp/capture.h264
+      capture-helper --list-windows
+
+    Target options:
+      --window-id <id>        Capture exact macOS window id from `list`
+      --window-name <string>  Window title substring. Can repeat.
+      --window-names <a,b>    Comma-separated window title substrings.
+      --app-name <string>     Restrict title matching to exact app name.
+      --pid <int>             Capture largest suitable window owned by PID.
+
+    Capture options:
+      --max-fps <int>         Max frame rate (default: 15)
+      --max-size <int>        Max dimension in pixels (default: 720)
+      --framed                Framed output with stdin commands
+
+    Record options:
+      --output, -o <path>     MP4 output path
+      --duration <seconds>    Stop automatically after duration
+      --ffmpeg <path>         Explicit ffmpeg path
+
+    Framed stdin commands:
+      +name <substring>       Add window by title substring
+      +match <app>\t<title>   Add window by app name + title substring
+      +pid <int>              Add largest window owned by PID
+      +id <int>               Add exact window id
+      -<index>                Remove window at index
+    """
+    writeString(usage, toStderr: true)
+    exit(0)
+}

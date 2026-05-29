@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show tool versions
+        run: |
+          swift --version
+          node --version
+          npm --version
+      - name: Swift build
+        run: swift build -c release
+      - name: Swift test
+        run: swift test
+      - name: Build npm native artifact
+        run: npm run build:native
+      - name: CLI smoke
+        run: |
+          node bin/capture-helper.js version
+          node bin/capture-helper.js doctor --json >/tmp/capture-helper-doctor.json || true
+          python3 -m json.tool /tmp/capture-helper-doctor.json >/dev/null
+          # GitHub-hosted runners may not grant Screen Recording permission, so list is opportunistic.
+          node bin/capture-helper.js list --json >/tmp/capture-helper-windows.json || true
+          if [ -s /tmp/capture-helper-windows.json ]; then python3 -m json.tool /tmp/capture-helper-windows.json >/dev/null; fi
+      - name: npm pack dry run
+        run: npm pack --dry-run

@@ -1,15 +1,100 @@
 # capture-helper protocol
 
-## Legacy raw mode
+## Commands
 
-When invoked without `--framed`, `capture-helper` writes one raw H.264 Annex B stream to stdout.
+### `version`
 
-A target is required:
+Prints build/provenance JSON to stdout.
+
+```bash
+capture-helper version
+```
+
+### `doctor`
+
+Checks runtime readiness and prints JSON to stdout.
+
+```bash
+capture-helper doctor --json
+```
+
+Current checks include:
+
+- macOS version
+- native binary presence
+- optional `ffmpeg` presence
+- ScreenCaptureKit window enumeration / Screen Recording permission signal
+
+### `list`
+
+Lists macOS windows.
+
+```bash
+capture-helper list --json
+```
+
+Default output is a JSON object:
+
+```json
+{
+  "type": "windows",
+  "count": 1,
+  "windows": [
+    {
+      "id": 12345,
+      "title": "Example",
+      "app": "ExampleApp",
+      "pid": 999,
+      "width": 1200,
+      "height": 800,
+      "x": 0,
+      "y": 30,
+      "layer": 0,
+      "onScreen": true
+    }
+  ]
+}
+```
+
+Legacy JSON-lines output is available with:
+
+```bash
+capture-helper list --json-lines
+capture-helper --list-windows
+```
+
+### `capture`
+
+Writes one raw H.264 Annex B stream to stdout.
+
+```bash
+capture-helper capture --window-id 12345
+capture-helper capture --pid 12345
+capture-helper capture --app-name Simulator --window-name "mm-1"
+```
+
+Legacy direct flags are also supported:
 
 ```bash
 capture-helper --window-name "Simulator"
-capture-helper --app-name Simulator --window-name "mm-1"
-capture-helper --pid 12345
+```
+
+### `record`
+
+Records a target to MP4 using `ffmpeg`.
+
+```bash
+capture-helper record --window-id 12345 --duration 5 --output evidence.mp4
+```
+
+`record` invokes a child `capture` process and pipes its H.264 output to `ffmpeg`.
+
+### `stream`
+
+`stream` is capture mode with framed multi-window behavior enabled.
+
+```bash
+capture-helper stream --framed --window-id 12345
 ```
 
 ## Framed mode
@@ -32,22 +117,25 @@ Commands are line-based and available only in `--framed` mode:
 +name <substring>         Add window by title substring
 +match <app>\t<title>     Add window by exact app name + title substring
 +pid <int>                Add largest suitable window owned by PID
++id <int>                 Add exact window id
 -<index>                  Remove window at index
 ```
 
 ## stderr events
 
-The helper writes JSON lines to stderr. Event examples:
+The helper writes JSON lines to stderr for capture/stream/record diagnostics. Event examples:
 
 ```json
 {"type":"added","index":0,"name":"Simulator","width":720,"height":480}
 {"type":"add_failed","name":"Simulator","error":"no window matching 'Simulator'"}
+{"type":"record_start","output":"evidence.mp4"}
+{"type":"record_complete","output":"evidence.mp4","captureStatus":0,"ffmpegStatus":0}
 {"type":"removed","index":0}
 {"type":"info","msg":"shutting down"}
-{"type":"error","msg":"--window-name or --pid is required in non-framed mode"}
+{"type":"error","msg":"--window-id, --window-name, or --pid is required in non-framed mode"}
 ```
 
-Consumers should treat stderr as the structured control/diagnostic channel and stdout as binary media only.
+Consumers should treat stderr as the structured control/diagnostic channel and stdout as binary media for capture/stream commands.
 
 ## Target resolution boundary
 
