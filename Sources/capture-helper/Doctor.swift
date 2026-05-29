@@ -162,10 +162,10 @@ func windowEnumerationCheck() async -> DoctorCheck {
 }
 
 func classifyWindowEnumerationError(_ error: Error) -> (code: String, message: String) {
-    let text = "\(error)".lowercased()
-    if text.contains("permission") || text.contains("not authorized") || text.contains("denied") || text.contains("privacy") {
-        return (DoctorCode.screenRecordingDenied, "Screen Recording permission appears to be denied for the launching app")
+    if isScreenRecordingDeniedError(error) {
+        return (DoctorCode.screenRecordingDenied, screenRecordingDeniedMessage())
     }
+    let text = "\(error)".lowercased()
     if text.contains("windowserver") || text.contains("window server") || text.contains("connection invalid") || text.contains("not connected") {
         return (DoctorCode.windowServerUnavailable, "WindowServer / GUI session appears unavailable")
     }

@@ -16,14 +16,21 @@ func errorCode(for error: Error) -> String {
     if let captureError = error as? CaptureError {
         return captureError.code
     }
+    if isScreenRecordingDeniedError(error) {
+        return DoctorCode.screenRecordingDenied
+    }
     return "unexpected_error"
 }
 
 func errorObject(_ error: Error, context: [String: Any] = [:]) -> [String: Any] {
     var object = context
     object["type"] = "error"
-    object["code"] = errorCode(for: error)
+    let code = errorCode(for: error)
+    object["code"] = code
     object["message"] = "\(error)"
+    if code == DoctorCode.screenRecordingDenied {
+        object["remediation"] = screenRecordingRemediation()
+    }
     return object
 }
 
@@ -37,4 +44,29 @@ func logErrorMessage(code: String, message: String, context: [String: Any] = [:]
     object["code"] = code
     object["message"] = message
     emitJSONLine(object, toStderr: true)
+}
+
+func isScreenRecordingDeniedError(_ error: Error) -> Bool {
+    let text = "\(error)".lowercased()
+    return text.contains("screencapturekit.scstreamerrordomain code=-3801")
+        || text.contains("declined tcc")
+        || text.contains("tccs for application, window, display capture")
+        || text.contains("screen recording")
+        || text.contains("not authorized")
+        || text.contains("permission")
+        || text.contains("denied")
+        || text.contains("privacy")
+}
+
+func screenRecordingDeniedMessage() -> String {
+    "Screen Recording permission appears to be denied for the launching app"
+}
+
+func screenRecordingRemediation() -> [String] {
+    [
+        "Open System Settings > Privacy & Security > Screen & System Audio Recording.",
+        "If running from Terminal/iTerm/Codex locally, enable the terminal app.",
+        "If running over SSH, enable /usr/libexec/sshd-keygen-wrapper.",
+        "Then restart the launcher and run capture-helper doctor --json."
+    ]
 }

@@ -148,13 +148,15 @@ See [docs/protocol.md](docs/protocol.md) for the framed stream and event contrac
 
 Grant Screen Recording permission to the terminal app, IDE, or agent host that launches the helper:
 
-**System Settings → Privacy & Security → Screen Recording**
+**System Settings → Privacy & Security → Screen & System Audio Recording**
 
 After granting permission, restart the launching app. Use this to check readiness:
 
 ```bash
 capture-helper doctor --json
 ```
+
+If you see `Code=-3801` / `screen_recording_denied`, especially over SSH, see [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Integration principle
 

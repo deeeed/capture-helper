@@ -14,7 +14,7 @@ final class CaptureHelperTests: XCTestCase {
         let object = try parseJSONObject(result.stdout)
         XCTAssertEqual(object["name"] as? String, "@siteed/capture-helper")
         XCTAssertEqual(object["binary"] as? String, "capture-helper")
-        XCTAssertEqual(object["version"] as? String, "0.1.2")
+        XCTAssertEqual(object["version"] as? String, "0.1.3")
         XCTAssertNotNil(object["architecture"])
         XCTAssertNotNil(object["osVersion"])
     }
