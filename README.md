@@ -44,6 +44,7 @@ capture-helper --version
 
 # Environment readiness and permissions diagnostics
 capture-helper doctor --json
+# includes stable codes like screen_recording_denied, window_server_unavailable, ffmpeg_missing
 
 # List windows as a machine-readable JSON object
 capture-helper list --json

@@ -169,6 +169,45 @@ The helper writes JSON lines to stderr for capture/stream/record diagnostics. Ev
 Consumers should treat stderr as the structured control/diagnostic channel and stdout as binary media for capture/stream commands.
 
 
+
+## Doctor diagnostics
+
+`doctor --json` emits stable check IDs and codes so callers can distinguish environment failures:
+
+```json
+{
+  "type": "doctor",
+  "ok": true,
+  "checks": [
+    { "id": "window_enumeration", "ok": true, "code": "window_enumeration_ok", "required": true }
+  ],
+  "summary": {
+    "requiredFailureCount": 0,
+    "optionalFailureCount": 0,
+    "requiredFailureCodes": [],
+    "optionalFailureCodes": []
+  }
+}
+```
+
+Stable doctor codes include:
+
+| Code | Meaning |
+| --- | --- |
+| `macos_supported` | Current macOS supports ScreenCaptureKit. |
+| `unsupported_macos` | macOS 13.0+ is required. |
+| `native_binary_present` | Running native binary is executable. |
+| `native_binary_missing` | Running native binary is not executable. |
+| `ffmpeg_present` | `ffmpeg` is available for `record`. |
+| `ffmpeg_missing` | `ffmpeg` is missing; this is optional unless using `record`. |
+| `screencapture_present` | `/usr/sbin/screencapture` is available for `snapshot`. |
+| `screencapture_missing` | `snapshot` dependency is unavailable. |
+| `window_enumeration_ok` | ScreenCaptureKit returned capturable windows. |
+| `no_capturable_windows` | ScreenCaptureKit worked but no usable app windows were visible. |
+| `screen_recording_denied` | Screen Recording permission appears denied. |
+| `window_server_unavailable` | GUI session / WindowServer appears unavailable. |
+| `window_enumeration_failed` | Window enumeration failed for another reason. |
+
 ## Structured errors
 
 Command failures emit one JSON line on stderr with a stable error `code`:

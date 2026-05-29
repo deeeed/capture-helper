@@ -19,6 +19,58 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertNotNil(object["osVersion"])
     }
 
+
+    func testDoctorProducesStableCheckCodesAndSummary() throws {
+        let result = try runHelper(["doctor", "--json"])
+
+        let object = try parseJSONObject(result.stdout)
+        XCTAssertEqual(object["type"] as? String, "doctor")
+        XCTAssertNotNil(object["ok"])
+        XCTAssertNotNil(object["build"])
+
+        let checks = try XCTUnwrap(object["checks"] as? [[String: Any]])
+        let checksById = Dictionary(uniqueKeysWithValues: checks.compactMap { check -> (String, [String: Any])? in
+            guard let id = check["id"] as? String else { return nil }
+            return (id, check)
+        })
+
+        XCTAssertNotNil(checksById["macos"])
+        XCTAssertNotNil(checksById["native_binary"])
+        XCTAssertNotNil(checksById["ffmpeg"])
+        XCTAssertNotNil(checksById["screencapture"])
+        XCTAssertNotNil(checksById["window_enumeration"])
+
+        for check in checks {
+            XCTAssertNotNil(check["id"], "check missing id: \(check)")
+            XCTAssertNotNil(check["name"], "check missing name: \(check)")
+            XCTAssertNotNil(check["ok"], "check missing ok: \(check)")
+            XCTAssertNotNil(check["code"], "check missing code: \(check)")
+            XCTAssertNotNil(check["required"], "check missing required: \(check)")
+            XCTAssertNotNil(check["message"], "check missing message: \(check)")
+        }
+
+        let macOSCode = checksById["macos"]?["code"] as? String
+        XCTAssertTrue(["macos_supported", "unsupported_macos"].contains(macOSCode))
+
+        let ffmpegCode = checksById["ffmpeg"]?["code"] as? String
+        XCTAssertTrue(["ffmpeg_present", "ffmpeg_missing"].contains(ffmpegCode))
+
+        let windowCode = checksById["window_enumeration"]?["code"] as? String
+        XCTAssertTrue([
+            "window_enumeration_ok",
+            "no_capturable_windows",
+            "screen_recording_denied",
+            "window_server_unavailable",
+            "window_enumeration_failed"
+        ].contains(windowCode))
+
+        let summary = try XCTUnwrap(object["summary"] as? [String: Any])
+        XCTAssertNotNil(summary["requiredFailureCount"])
+        XCTAssertNotNil(summary["optionalFailureCount"])
+        XCTAssertNotNil(summary["requiredFailureCodes"])
+        XCTAssertNotNil(summary["optionalFailureCodes"])
+    }
+
     func testHelpMentionsResolveAndSnapshot() throws {
         let result = try runHelper(["--help"])
 
