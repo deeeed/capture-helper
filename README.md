@@ -17,9 +17,31 @@ The CLI is intentionally generic. Product-specific concepts such as Farmslot slo
 - Screen Recording permission for the terminal or parent app
 - Optional: `ffmpeg` for `record` mode
 
-## Install / build
+## Install
 
-From source:
+Use with `npx` without installing globally:
+
+```bash
+npx -y @siteed/capture-helper@latest doctor --json
+npx -y @siteed/capture-helper@latest list --json
+```
+
+Install globally with npm:
+
+```bash
+npm install -g @siteed/capture-helper
+capture-helper doctor --json
+```
+
+Download the native release binary directly:
+
+```bash
+curl -L https://github.com/deeeed/capture-helper/releases/latest/download/capture-helper-darwin-arm64 \
+  -o /usr/local/bin/capture-helper
+chmod +x /usr/local/bin/capture-helper
+```
+
+## Build from source
 
 ```bash
 swift build -c release
