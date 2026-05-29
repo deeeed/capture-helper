@@ -124,7 +124,11 @@ func printWindowTable(_ windows: [[String: Any]]) {
     if capturable.count > 80 {
         writeString("… \(capturable.count - 80) more likely capturable windows omitted; use --json for complete output.\n")
     }
+    if Runtime.config.listAll {
+        writeString("\nShowing all matching windows, including offscreen/non-capturable entries. Human default hides those.\n")
+    }
     writeString("\nTips: capture-helper record --window-id <ID> --duration 5 -o evidence.mp4 --open\n")
+    writeString("      capture-helper list --all --human to debug offscreen/system windows.\n")
     writeString("      capture-helper --help for all commands and selectors.\n")
 }
 

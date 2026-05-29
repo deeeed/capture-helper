@@ -84,6 +84,7 @@ capture-helper list --human
 capture-helper -l
 capture-helper list -h
 capture-helper list --on-screen --capturable --human
+capture-helper list --all --human
 
 # Legacy JSON-lines listing
 capture-helper --list-windows

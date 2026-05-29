@@ -24,6 +24,13 @@ func runRecord(_ config: Config) async throws {
 
     let resolved = try await resolveTarget(config)
     let window = resolved.window
+    if !resolved.onScreenIds.contains(window.windowID) {
+        logErrorMessage(
+            code: "offscreen_window_warning",
+            message: "selected window is off-screen; recording may produce no frames. Use `capture-helper list --on-screen --capturable --human` for safer targets.",
+            context: ["windowId": Int(window.windowID)]
+        )
+    }
     let srcW = Int(window.frame.width)
     let srcH = Int(window.frame.height)
     let scale = min(Double(config.maxSize) / Double(max(srcW, srcH)), 1.0)

@@ -41,6 +41,7 @@ capture-helper list --human
 capture-helper list -h
 capture-helper -l
 capture-helper list --on-screen --capturable --human
+capture-helper list --all --human
 ```
 
 Default output is a JSON object:

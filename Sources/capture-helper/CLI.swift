@@ -30,6 +30,7 @@ struct Config {
     var openOutput = false
     var listOnScreenOnly = false
     var listCapturableOnly = false
+    var listAll = false
 }
 
 enum Runtime {
@@ -115,6 +116,10 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
             cfg.listOnScreenOnly = true
         case "--capturable":
             cfg.listCapturableOnly = true
+        case "--all":
+            cfg.listAll = true
+            cfg.listOnScreenOnly = false
+            cfg.listCapturableOnly = false
         case "--open-permissions":
             cfg.openPermissions = true
         case "--request-permission", "--request-permissions":
@@ -155,6 +160,11 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
         if args.count == 1 {
             cfg.json = false
         }
+    }
+
+    if cfg.command == .list && !cfg.json && !cfg.listAll {
+        cfg.listOnScreenOnly = true
+        cfg.listCapturableOnly = true
     }
 
     return cfg
@@ -205,6 +215,7 @@ func exitUsage() -> Never {
     List filters:
       --on-screen             Show only currently on-screen windows
       --capturable            Show only likely capturable application windows
+      --all                   Include offscreen/system/non-capturable windows
 
     Permission options:
       --open-permissions      Open the macOS Screen Recording permission pane
