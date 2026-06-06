@@ -2,9 +2,32 @@
 
 `@siteed/capture-helper` is intended to publish both a GitHub release binary and an npm wrapper package.
 
+## Changelog
+
+`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/) and is the source of
+truth for release notes.
+
+- **Every PR that changes behavior, the CLI, the protocol, packaging, or docs must add an
+  entry under `## [Unreleased]`** in the appropriate group (`Added` / `Changed` / `Fixed` /
+  `Removed` / `Deprecated` / `Security`). Keep entries user-facing and concise. Trivial
+  internal-only changes (refactors with no observable effect, test-only tweaks) may be
+  skipped.
+- Do not assign a version number in a PR — leave the change under `[Unreleased]`. The
+  version is set only at release time (see below).
+
 ## Before release
 
-1. Confirm the package version in `package.json`, `Sources/capture-helper/BuildInfo.swift`, and tests match.
+0. **Roll the changelog.** Move everything under `## [Unreleased]` into a new
+   `## [X.Y.Z] - YYYY-MM-DD` section, leave an empty `[Unreleased]` above it, and update the
+   compare links at the bottom of `CHANGELOG.md`:
+
+   ```text
+   [Unreleased]: https://github.com/deeeed/capture-helper/compare/vX.Y.Z...HEAD
+   [X.Y.Z]: https://github.com/deeeed/capture-helper/compare/vPREV...vX.Y.Z
+   ```
+
+
+1. Confirm the version matches in `package.json`, `Sources/capture-helper/BuildInfo.swift`, the tests, and the new `CHANGELOG.md` heading.
 2. Confirm `NPM_TOKEN` is set in GitHub Actions secrets. The token must publish without OTP in CI.
 3. Run local validation:
 

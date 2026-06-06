@@ -27,7 +27,7 @@ Current checks include:
 
 ### `list`
 
-Lists macOS windows.
+Lists windows.
 
 ```bash
 capture-helper
@@ -103,7 +103,7 @@ Captures a one-frame PNG using the resolved window id. Output is JSON on stdout;
 capture-helper snapshot --window-id 12345 --output screenshot.png
 ```
 
-`snapshot` uses macOS `/usr/sbin/screencapture` after resolving the target.
+On macOS, `snapshot` uses `/usr/sbin/screencapture` after resolving the target; on Linux it grabs one frame via the X11 grabber and encodes it to PNG with `ffmpeg`.
 
 ### `capture`
 
@@ -123,13 +123,13 @@ capture-helper --window-name "Simulator"
 
 ### `record`
 
-Records a target to MP4 using a native AVFoundation writer.
+Records a target to MP4. On macOS this uses a native AVFoundation writer; on Linux it pipes the X11 grabber into `ffmpeg`.
 
 ```bash
 capture-helper record --window-id 12345 --duration 5 --output evidence.mp4
 ```
 
-`record` resolves the target window, captures frames with ScreenCaptureKit, and writes an MP4 directly. It does not require `ffmpeg`.
+On macOS, `record` resolves the target window, captures frames with ScreenCaptureKit, and writes an MP4 directly with no `ffmpeg` dependency. On Linux, `record` requires `ffmpeg`.
 
 ### `stream`
 
@@ -146,8 +146,12 @@ capture-helper stream --framed --window-id 12345
 Each stdout frame is prefixed by a 6-byte header:
 
 ```text
-[4B payload length][1B flags][1B window index][payload]
+[4B payload length BE][1B flags][1B window index][payload]
 ```
+
+- **payload length**: big-endian `uint32`, byte length of the payload that follows.
+- **flags**: bit 0 (`flags & 1`) is set when the payload is a keyframe (IDR); other bits are reserved (0).
+- **window index**: the slot index assigned to the window in `added` events.
 
 The payload is H.264 Annex B bytes. Window indices are assigned by the helper as windows are added.
 
@@ -210,7 +214,7 @@ Stable doctor codes include:
 | `native_binary_present` | Running native binary is executable. |
 | `native_binary_missing` | Running native binary is not executable. |
 | `ffmpeg_present` | `ffmpeg` is available for external workflows. |
-| `ffmpeg_missing` | `ffmpeg` is missing; native `record` does not require it. |
+| `ffmpeg_missing` | `ffmpeg` is missing. Optional on macOS (native `record`); required on Linux. |
 | `screencapture_present` | `/usr/sbin/screencapture` is available for `snapshot`. |
 | `screencapture_missing` | `snapshot` dependency is unavailable. |
 | `window_enumeration_ok` | ScreenCaptureKit returned capturable windows. |
@@ -232,7 +236,7 @@ Current stable codes include:
 | Code | Meaning |
 | --- | --- |
 | `target_required` | Required selector or output argument is missing. |
-| `window_not_found` | Target selector was valid, but no matching macOS window was found. |
+| `window_not_found` | Target selector was valid, but no matching window was found. |
 | `dependency_missing` | Required external tool such as `screencapture` is missing. |
 | `record_failed` | Record command resolved a window but MP4 writing failed. |
 | `snapshot_failed` | Snapshot command resolved a window but image capture failed. |
@@ -243,9 +247,31 @@ Current stable codes include:
 | `unknown_command` | Framed stdin command was not recognized. |
 | `unexpected_error` | Non-`CaptureError` failure. |
 
+## Platform notes (Linux)
+
+On Linux the protocol is identical, with these implementation differences:
+
+- `id` is an **X11 window id (XID)**, not a macOS `CGWindowID`. XIDs are stable for a
+  window's lifetime and may be reused after a window is destroyed. The `added`/`removed`
+  index protocol insulates framed consumers from raw ids.
+- Capture is occlusion-correct via XComposite; H.264 is produced by `ffmpeg`
+  (`libx264` by default, `h264_nvenc` opt-in). SPS/PPS are repeated on every keyframe.
+- `record_complete.frames` is best-effort on Linux: it is included when `ffprobe`
+  (shipped with `ffmpeg`) can count the output frames, and omitted otherwise. macOS
+  always reports it.
+- `doctor` keeps the same JSON shape and `summary.requiredFailureCodes`, with Linux
+  codes: `session_x11` / `session_wayland` / `session_unknown`, `ffmpeg_present` /
+  `ffmpeg_missing` (required on Linux), `grabber_compiled` / `grabber_missing`,
+  `display_available` / `display_unavailable`, `xcomposite_present` / `xcomposite_missing`,
+  `window_enumeration_ok` / `no_capturable_windows`.
+- Requires an Xorg session with a logged-in desktop; captured apps must be X11 clients.
+- `permissions` shares the stable macOS fields (`permission`, `grantedBefore`, `grantedAfter`,
+  `requestAttempted`, `settingsOpenAttempted`, `remediation`) with always-granted values, plus a
+  `platform` field. The macOS-only `launcher` object is omitted (X11 has no permission gate).
+
 ## Target resolution boundary
 
-The helper intentionally accepts generic macOS target selectors only. Domain-specific tools should perform their own resolution before invoking it.
+The helper intentionally accepts generic window target selectors only. Domain-specific tools should perform their own resolution before invoking it.
 
 Examples:
 

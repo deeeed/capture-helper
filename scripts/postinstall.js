@@ -7,12 +7,18 @@ if (process.env.SITEED_CAPTURE_HELPER_SKIP_POSTINSTALL) {
   process.exit(0);
 }
 
-if (process.platform !== 'darwin') {
-  console.warn('@siteed/capture-helper is only supported on macOS.');
+const root = join(__dirname, '..');
+
+if (process.platform === 'linux') {
+  buildLinuxGrabber(root);
   process.exit(0);
 }
 
-const root = join(__dirname, '..');
+if (process.platform !== 'darwin') {
+  console.warn('@siteed/capture-helper supports macOS and Linux only.');
+  process.exit(0);
+}
+
 const nativeBin = join(root, 'native', 'capture-helper');
 const releaseBin = join(root, '.build', 'release', 'capture-helper');
 
@@ -40,3 +46,33 @@ if (build.status !== 0) {
 
 mkdirSync(dirname(nativeBin), { recursive: true });
 copyFileSync(releaseBin, nativeBin);
+
+function buildLinuxGrabber(rootDir) {
+  const out = join(rootDir, 'native', 'x11-grabber');
+  const src = join(rootDir, 'src', 'linux', 'x11-grabber.c');
+  if (existsSync(out)) return; // already built
+
+  if (!existsSync(src)) {
+    console.warn(`capture-helper: grabber source missing at ${src}; Linux capture unavailable.`);
+    return;
+  }
+  if (spawnSync('gcc', ['--version'], { stdio: 'ignore' }).status !== 0) {
+    console.warn('capture-helper: gcc not found. Install build deps:\n  sudo apt install -y gcc ffmpeg libx11-dev libxcomposite-dev libxdamage-dev libxfixes-dev libxext-dev');
+    return;
+  }
+  const header = '/usr/include/X11/extensions/Xcomposite.h';
+  if (!existsSync(header)) {
+    console.warn('capture-helper: X11 development headers missing. Install:\n  sudo apt install -y libx11-dev libxcomposite-dev libxdamage-dev libxfixes-dev libxext-dev');
+    return;
+  }
+
+  mkdirSync(dirname(out), { recursive: true });
+  const build = spawnSync('gcc', ['-O2', '-o', out, src, '-lX11', '-lXcomposite', '-lXext'], { stdio: 'inherit' });
+  if (build.status !== 0) {
+    console.warn('capture-helper: failed to compile x11-grabber; Linux capture unavailable.');
+    return;
+  }
+  if (spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status !== 0) {
+    console.warn('capture-helper: ffmpeg not found (required on Linux). Install: sudo apt install -y ffmpeg');
+  }
+}

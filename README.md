@@ -1,8 +1,8 @@
 # @siteed/capture-helper
 
-Generic macOS window capture helper for agents, automation tools, and evidence pipelines.
+Generic window capture helper for agents, automation tools, and evidence pipelines — macOS (ScreenCaptureKit) and Linux/X11 (XComposite + ffmpeg).
 
-`capture-helper` is a small Swift CLI built on ScreenCaptureKit. It discovers macOS windows, captures exact window targets, streams H.264 Annex B bytes, and records MP4 evidence with a native AVFoundation writer.
+On macOS, `capture-helper` is a small Swift CLI built on ScreenCaptureKit: it discovers windows, captures exact window targets, streams H.264 Annex B bytes, and records MP4 evidence with a native AVFoundation writer (no ffmpeg). On Linux it reproduces the same CLI/protocol over X11 using an XComposite grabber plus ffmpeg — see [Linux support](#linux-support).
 
 ## Status
 
@@ -16,6 +16,35 @@ The CLI is intentionally generic. Product-specific concepts such as Farmslot slo
 - Xcode command-line tools / Swift toolchain
 - Screen Recording permission for the terminal or parent app
 - Optional: `ffmpeg` for external workflows that still want it; built-in `record` mode is native.
+
+## Linux support
+
+On Linux the same CLI/protocol is implemented by a Node backend that drives a small
+C grabber (XComposite per-window capture) and `ffmpeg` for H.264 encoding. The
+`capture-helper` command auto-dispatches to it on Linux; commands, flags, the framed
+stream protocol, and JSON events are identical to macOS (see [docs/protocol.md](docs/protocol.md)).
+
+Requirements:
+
+- **X11 (Xorg) session.** GNOME-on-Wayland per-window capture is portal-gated and
+  not automatable — log into an Xorg session (e.g. "Ubuntu on Xorg", or set
+  `WaylandEnable=false` in `/etc/gdm3/custom.conf`). A graphical desktop must be
+  logged in (the GDM greeter has no app windows; use autologin for headless nodes).
+- **Captured apps must be X11 clients** (Wayland-native surfaces are invisible to the
+  X path). Force X11 where needed: `GDK_BACKEND=x11`, `QT_QPA_PLATFORM=xcb`,
+  Electron `--ozone-platform=x11`.
+- **Build/runtime deps** (`ffmpeg` is required on Linux):
+
+  ```bash
+  sudo apt install -y gcc ffmpeg libx11-dev libxcomposite-dev libxdamage-dev libxfixes-dev libxext-dev
+  # or run the helper:
+  bash scripts/setup-linux-node.sh
+  ```
+
+Hardware H.264 encoding is opt-in via `--encoder h264_nvenc` (or
+`CAPTURE_HELPER_ENCODER=h264_nvenc`); the default `libx264` works everywhere.
+Verify readiness with `capture-helper doctor --json`. On Linux, `id` values are X11
+window ids (XIDs).
 
 ## Install
 
@@ -55,7 +84,7 @@ The npm build script copies the release binary to:
 native/capture-helper
 ```
 
-When installed as an npm package, `postinstall` attempts to build the native Swift binary if the packaged binary is missing or unusable. Set `SITEED_CAPTURE_HELPER_SKIP_POSTINSTALL=1` to skip that step.
+When installed as an npm package, `postinstall` builds the native backend for the current platform if it's missing: on macOS it builds the Swift binary (`native/capture-helper`); on Linux it compiles the X11 grabber (`native/x11-grabber`) via `gcc`. If the toolchain or dev headers are absent it prints the install command and skips (the install never hard-fails). Set `SITEED_CAPTURE_HELPER_SKIP_POSTINSTALL=1` to skip that step.
 
 ## Commands
 
@@ -101,7 +130,7 @@ capture-helper --window-name "Simulator" > /tmp/capture.h264
 # Framed multi-window stream with stdin control
 capture-helper stream --framed --window-id 12345 > /tmp/windows.h264
 
-# Record MP4 evidence without ffmpeg
+# Record MP4 evidence (macOS: native AVFoundation, no ffmpeg; Linux: ffmpeg)
 capture-helper record --window-id 12345 --duration 5 --output evidence.mp4 --open
 ```
 
