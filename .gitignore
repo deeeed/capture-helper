@@ -9,3 +9,5 @@ yarn-error.log*
 *.h264
 *.mp4
 native/
+.omc/
+.omx/

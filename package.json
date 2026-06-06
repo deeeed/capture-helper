@@ -1,7 +1,7 @@
 {
   "name": "@siteed/capture-helper",
   "version": "0.1.8",
-  "description": "Generic macOS ScreenCaptureKit CLI for window discovery, capture, recording, and agent evidence streams.",
+  "description": "Generic window-capture CLI for window discovery, capture, recording, and agent evidence streams. macOS (ScreenCaptureKit) and Linux/X11 (XComposite + ffmpeg).",
   "license": "MIT",
   "private": false,
   "bin": {
@@ -11,13 +11,16 @@
     "bin/",
     "native/",
     "Sources/",
+    "src/",
     "Package.swift",
     "README.md",
+    "CHANGELOG.md",
     "docs/",
     "scripts/"
   ],
   "scripts": {
     "build:native": "bash scripts/build.sh",
+    "e2e": "bash scripts/e2e/validate.sh",
     "doctor": "node bin/capture-helper.js doctor --json",
     "list": "node bin/capture-helper.js list --json",
     "version:helper": "node bin/capture-helper.js version",
@@ -47,7 +50,8 @@
     "access": "public"
   },
   "os": [
-    "darwin"
+    "darwin",
+    "linux"
   ],
   "cpu": [
     "arm64",
