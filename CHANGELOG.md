@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `record --framed` on macOS now accepts `snapshot <path>` and `stop` stdin commands, so automation can write PNG proof frames from the active recording stream without starting a second ScreenCaptureKit capture.
+
 ## [0.2.0] - 2026-06-06
 
 ### Added

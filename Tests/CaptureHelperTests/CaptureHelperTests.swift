@@ -97,6 +97,8 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertEqual(result.status, 0)
         XCTAssertTrue(result.stderr.contains("capture-helper resolve"), result.stderr)
         XCTAssertTrue(result.stderr.contains("capture-helper snapshot"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("snapshot <path>"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("stop"), result.stderr)
         XCTAssertTrue(result.stderr.contains("capture-helper permissions"), result.stderr)
         XCTAssertTrue(result.stderr.contains("--human"), result.stderr)
         XCTAssertTrue(result.stderr.contains("capture-helper -l"), result.stderr)

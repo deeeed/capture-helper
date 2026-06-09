@@ -15,7 +15,7 @@ The CLI is intentionally generic. Product-specific concepts such as Farmslot slo
 - macOS 13.0+
 - Xcode command-line tools / Swift toolchain
 - Screen Recording permission for the terminal or parent app
-- Optional: `ffmpeg` for external workflows that still want it; built-in `record` mode is native.
+- Optional: `ffmpeg` for external workflows that still want it; macOS `record` and `record --framed` session snapshots are native.
 
 ## Linux support
 
@@ -132,6 +132,10 @@ capture-helper stream --framed --window-id 12345 > /tmp/windows.h264
 
 # Record MP4 evidence (macOS: native AVFoundation, no ffmpeg; Linux: ffmpeg)
 capture-helper record --window-id 12345 --duration 5 --output evidence.mp4 --open
+
+# Record MP4 plus PNG proof frames from the same macOS native recording stream
+{ sleep 1; echo "snapshot step-1.png"; echo stop; } | \
+  capture-helper record --framed --window-id 12345 --output evidence.mp4
 ```
 
 ## Resolve and snapshot
