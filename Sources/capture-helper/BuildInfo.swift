@@ -4,6 +4,7 @@ enum BuildInfo {
     static let name = "@siteed/capture-helper"
     static let binaryName = "capture-helper"
     static let version = "0.2.0"
+    static let capabilities = ["record_session_snapshot"]
 
     static var architecture: String {
         #if arch(arm64)
@@ -25,6 +26,7 @@ enum BuildInfo {
             "name": name,
             "binary": binaryName,
             "version": version,
+            "capabilities": capabilities,
             "architecture": architecture,
             "os": "macOS",
             "osVersion": osVersion

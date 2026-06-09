@@ -4,10 +4,21 @@
 
 ### `version`
 
-Prints build/provenance JSON to stdout.
+Prints build/provenance JSON to stdout, including stable feature capabilities.
 
 ```bash
 capture-helper version
+```
+
+Example shape:
+
+```json
+{
+  "type": "version",
+  "name": "@siteed/capture-helper",
+  "version": "0.2.0",
+  "capabilities": ["record_session_snapshot"]
+}
 ```
 
 ### `doctor`
@@ -140,7 +151,7 @@ snapshot screenshots/step-1.png
 stop
 ```
 
-Record-session snapshots are PNG files written from the active recording frame. On macOS they are encoded natively in Swift and do not require `ffmpeg`.
+Record-session snapshots are PNG files written from the active recording frame. On macOS they are encoded natively in Swift and do not require `ffmpeg`. Consumers should check `version --json` for the `record_session_snapshot` capability before using this protocol.
 
 ### `stream`
 
