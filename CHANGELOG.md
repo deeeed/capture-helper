@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-09
+
 ### Added
 
 - `record --framed` on macOS now accepts `snapshot <path>` and `stop` stdin commands, so automation can write PNG proof frames from the active recording stream without starting a second ScreenCaptureKit capture.
@@ -53,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Earlier 0.1.x releases: native MP4 recording, human-readable CLI output, window
   discovery, capture, snapshot, and streaming on macOS (ScreenCaptureKit).
 
-[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/deeeed/capture-helper/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/deeeed/capture-helper/compare/v0.1.8...v0.2.0
 [0.1.8]: https://github.com/deeeed/capture-helper/releases/tag/v0.1.8
