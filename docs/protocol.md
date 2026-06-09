@@ -4,10 +4,21 @@
 
 ### `version`
 
-Prints build/provenance JSON to stdout.
+Prints build/provenance JSON to stdout, including stable feature capabilities.
 
 ```bash
 capture-helper version
+```
+
+Example shape:
+
+```json
+{
+  "type": "version",
+  "name": "@siteed/capture-helper",
+  "version": "0.2.0",
+  "capabilities": ["record_session_snapshot"]
+}
 ```
 
 ### `doctor`
@@ -131,6 +142,17 @@ capture-helper record --window-id 12345 --duration 5 --output evidence.mp4
 
 On macOS, `record` resolves the target window, captures frames with ScreenCaptureKit, and writes an MP4 directly with no `ffmpeg` dependency. On Linux, `record` requires `ffmpeg`.
 
+`record --framed` keeps the MP4 writer running and accepts stdin control commands. This lets automation capture still-image proof from the same ScreenCaptureKit stream instead of starting a second capture against the same window.
+
+```bash
+capture-helper record --framed --window-id 12345 --output evidence.mp4
+# stdin:
+snapshot screenshots/step-1.png
+stop
+```
+
+Record-session snapshots are PNG files written from the active recording frame. On macOS they are encoded natively in Swift and do not require `ffmpeg`. Consumers should check `version --json` for the `record_session_snapshot` capability before using this protocol.
+
 ### `stream`
 
 `stream` is capture mode with framed multi-window behavior enabled.
@@ -157,7 +179,9 @@ The payload is H.264 Annex B bytes. Window indices are assigned by the helper as
 
 ## Stdin commands
 
-Commands are line-based and available only in `--framed` mode:
+Commands are line-based and available only in `--framed` mode.
+
+For `stream --framed`:
 
 ```text
 +name <substring>         Add window by title substring
@@ -166,6 +190,15 @@ Commands are line-based and available only in `--framed` mode:
 +id <int>                 Add exact window id
 -<index>                  Remove window at index
 ```
+
+For `record --framed`:
+
+```text
+snapshot <path>          Write a PNG from the active recording stream
+stop                     Finalize the MP4 and exit
+```
+
+`record --framed` emits `snapshot` events to stderr when a session snapshot is written.
 
 ## stderr events
 
@@ -176,6 +209,7 @@ The helper writes JSON lines to stderr for capture/stream/record diagnostics. Ev
 {"type":"add_failed","name":"Simulator","error":"no window matching 'Simulator'"}
 {"type":"record_start","output":"evidence.mp4"}
 {"type":"record_complete","engine":"native","output":"evidence.mp4","frames":75,"bytes":123456}
+{"type":"snapshot","engine":"native","mode":"record_session","output":"screenshots/step-1.png","bytes":123456}
 {"type":"removed","index":0}
 {"type":"info","msg":"shutting down"}
 {"type":"error","msg":"--window-id, --window-name, or --pid is required in non-framed mode"}

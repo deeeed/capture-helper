@@ -229,12 +229,16 @@ func exitUsage() -> Never {
       -l                      Shortcut for `list --human`
       --json-lines, --jsonl   JSON-lines output for list
 
-    Framed stdin commands:
+    Framed stream stdin commands:
       +name <substring>       Add window by title substring
       +match <app>\t<title>   Add window by app name + title substring
       +pid <int>              Add largest window owned by PID
       +id <int>               Add exact window id
       -<index>                Remove window at index
+
+    Framed record stdin commands:
+      snapshot <path>          Write a PNG from the active recording stream
+      stop                     Finalize the MP4 and exit
     """
     writeString(usage, toStderr: true)
     exit(0)
