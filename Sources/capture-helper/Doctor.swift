@@ -63,6 +63,16 @@ func runDoctor(json: Bool) async {
             let status = check.ok ? "OK" : (check.required ? "FAIL" : "WARN")
             writeString("[\(status)] \(check.name) (\(check.code)) — \(check.message)\n")
         }
+        if checks.contains(where: { $0.code == DoctorCode.screenRecordingDenied }) {
+            let hint = launcherPermissionHint()
+            if let target = hint["approvalTarget"] as? String {
+                writeString("\nScreen Recording (screenshots + screen video) is granted to the launching app (\(target)), not to capture-helper itself — that is why the permission prompt names your terminal/IDE/SSH agent. It gates screen capture, not your microphone.\n")
+            }
+            writeString("To fix:\n")
+            for line in screenRecordingRemediation() {
+                writeString("  - \(line)\n")
+            }
+        }
     }
 
     if !ok { exit(1) }
