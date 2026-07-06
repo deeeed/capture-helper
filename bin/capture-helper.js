@@ -4,12 +4,20 @@ const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 const os = require('node:os');
 const https = require('node:https');
+const {
+  assessNativeBinary,
+  teachMessage,
+  wrapperDoctorPayload,
+} = require('../scripts/lib/native-binary');
 
 const PKG = require('../package.json');
+const ROOT = join(__dirname, '..');
 const args = process.argv.slice(2);
 // `--no-update-check` is a wrapper-only flag: consume it so the native binary never sees it.
 const UPDATE_CHECK_DISABLED = args.includes('--no-update-check');
 const childArgs = args.filter((a) => a !== '--no-update-check');
+const wantsJson = childArgs.includes('--json');
+const primaryCommand = childArgs.find((a) => !a.startsWith('-')) || null;
 
 // macOS uses the native Swift binary (ScreenCaptureKit). Other platforms use the
 // generic Node backend (bin/backend.js), which loads a per-platform adapter +
@@ -24,27 +32,65 @@ if (NODE_BACKEND_PLATFORMS.has(process.platform)) {
   if (result.error) { console.error(result.error.message); process.exit(1); }
   finish(result.status);
 } else {
-  const candidates = [
-    process.env.SITEED_CAPTURE_HELPER_BIN,
-    join(__dirname, '..', 'native', 'capture-helper'),
-    join(__dirname, '..', '.build', 'release', 'capture-helper'),
-    '/opt/homebrew/bin/capture-helper',
-    '/usr/local/bin/capture-helper',
-  ].filter(Boolean);
-
-  const binary = candidates.find((candidate) => existsSync(candidate));
-  if (!binary) {
-    console.error([
-      'capture-helper native binary was not found.',
-      'Run `swift build -c release` or `npm run build:native`, then retry.',
-      'You can also set SITEED_CAPTURE_HELPER_BIN=/path/to/capture-helper.',
-    ].join('\n'));
-    process.exit(127);
+  const resolution = resolveDarwinBinary();
+  if (!resolution.ok) {
+    handleBrokenNative(resolution.assessment);
   }
 
-  const result = spawnSync(binary, childArgs, { stdio: 'inherit' });
+  const result = spawnSync(resolution.path, childArgs, { stdio: 'inherit' });
   if (result.error) { console.error(result.error.message); process.exit(1); }
   finish(result.status);
+}
+
+function resolveDarwinBinary() {
+  if (process.env.SITEED_CAPTURE_HELPER_BIN) {
+    const overrideAssessment = assessNativeBinary(ROOT, process.env.SITEED_CAPTURE_HELPER_BIN);
+    if (overrideAssessment.ok) return { ok: true, path: process.env.SITEED_CAPTURE_HELPER_BIN };
+    return { ok: false, assessment: overrideAssessment };
+  }
+
+  const packageNative = join(ROOT, 'native', 'capture-helper');
+  const packageAssessment = assessNativeBinary(ROOT, packageNative);
+  if (packageAssessment.ok) return { ok: true, path: packageNative };
+
+  // Installed npm package: do not mask a broken/missing bundled binary with an unrelated
+  // Homebrew copy that may be stale or differently signed.
+  if (isNpmPackageInstall(ROOT)) {
+    return { ok: false, assessment: packageAssessment };
+  }
+
+  const candidates = [
+    join(ROOT, '.build', 'apple', 'Products', 'Release', 'capture-helper'),
+    join(ROOT, '.build', 'release', 'capture-helper'),
+    '/opt/homebrew/bin/capture-helper',
+    '/usr/local/bin/capture-helper',
+  ];
+
+  let lastAssessment = packageAssessment;
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    const assessment = assessNativeBinary(ROOT, candidate);
+    if (assessment.ok) return { ok: true, path: candidate };
+    lastAssessment = assessment;
+  }
+  return { ok: false, assessment: lastAssessment };
+}
+
+function isNpmPackageInstall(root) {
+  return root.includes(join('node_modules', '@siteed', 'capture-helper'));
+}
+
+function handleBrokenNative(assessment) {
+  if (primaryCommand === 'doctor' && wantsJson) {
+    process.stdout.write(`${JSON.stringify(wrapperDoctorPayload(assessment, PKG.version))}\n`);
+    process.exit(1);
+  }
+  if (primaryCommand === 'doctor') {
+    process.stderr.write(`${teachMessage(assessment)}\n`);
+    process.exit(1);
+  }
+  process.stderr.write(`${teachMessage(assessment)}\n`);
+  process.exit(127);
 }
 
 // Exit, but first surface a one-line upgrade hint for diagnostic commands. The check is

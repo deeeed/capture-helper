@@ -47,7 +47,9 @@ git push origin main
 git push origin v0.2.0
 ```
 
-The release workflow builds a macOS arm64 binary, attaches it to the GitHub release, and publishes the npm package.
+The release workflow builds a universal macOS binary (arm64 + x86_64), ad-hoc signs it,
+attaches `capture-helper-darwin-universal` (+ SHA256 sidecar) to the GitHub release, and
+publishes the npm package.
 
 ## Verify release
 
@@ -58,8 +60,38 @@ npm install -g @siteed/capture-helper@latest
 capture-helper version
 ```
 
-## Current limitations
+## Signing and notarization
 
-- The release workflow currently builds arm64 on `macos-14`.
-- Universal binary / x86_64 release packaging is a follow-up.
-- Homebrew formula publishing is mirrored into `deeeed/homebrew-tap`.
+Release builds run `scripts/sign-macos-binary.sh`, which ad-hoc signs with hardened
+runtime (`codesign -s - --options runtime`). This is sufficient for npm installs (no
+quarantine) and for engineers who install via Homebrew.
+
+For curl-downloaded binaries, Gatekeeper may still prompt until the user removes
+quarantine (`xattr -d com.apple.quarantine`) or approves in System Settings. Full
+Gatekeeper silence requires Developer ID signing + notarization:
+
+```bash
+export CAPTURE_HELPER_CODESIGN_IDENTITY="Developer ID Application: …"
+npm run build:native
+xcrun notarytool submit native/capture-helper --apple-id … --team-id … --password …
+xcrun stapler staple native/capture-helper
+```
+
+## Maintainer publish checklist (after merge, before tagging)
+
+1. Confirm `CHANGELOG.md`, `package.json`, and `BuildInfo.swift` versions match.
+2. Tag and push: `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`
+3. Wait for the release workflow (GitHub asset + npm publish + tap bump).
+4. Verify on a machine **without Swift**:
+
+```bash
+npm install -g @siteed/capture-helper@latest
+capture-helper doctor --json
+brew install deeeed/tap/capture-helper
+capture-helper doctor --json
+codesign -dv --verbose=2 "$(which capture-helper)"
+```
+
+5. Report downstream teach-line updates (do not edit those repos in this PR):
+   - farmslot `install.sh`: set default `FARMSLOT_CAPTURE_HELPER_BREW_FORMULA=deeeed/tap/capture-helper`
+   - `experimental-metamask-farm/scripts/check-prereqs.sh` and `bootstrap-toolchains.sh`: same brew default

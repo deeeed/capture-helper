@@ -12,10 +12,10 @@ The CLI is intentionally generic. Product-specific concepts such as Farmslot slo
 
 ## Requirements
 
-- macOS 13.0+
-- Xcode command-line tools / Swift toolchain
+- macOS 13.0+ (Apple Silicon or Intel)
 - Screen Recording permission for the terminal or parent app
 - Optional: `ffmpeg` for external workflows that still want it; macOS `record` and `record --framed` session snapshots are native.
+- Swift/Xcode is only required when building from source — the published npm package and Homebrew formula ship a prebuilt universal binary.
 
 ## Linux support
 
@@ -55,20 +55,33 @@ npx -y @siteed/capture-helper@latest doctor --json
 npx -y @siteed/capture-helper@latest list --json
 ```
 
-Install globally with npm:
+Install globally with npm (primary path used by Farmslot and MetaMask farm installers):
 
 ```bash
 npm install -g @siteed/capture-helper
 capture-helper doctor --json
 ```
 
+Install with Homebrew (auto-taps `deeeed/tap`; no separate tap step):
+
+```bash
+brew install deeeed/tap/capture-helper
+capture-helper doctor --json
+```
+
 Download the native release binary directly:
 
 ```bash
-curl -L https://github.com/deeeed/capture-helper/releases/latest/download/capture-helper-darwin-arm64 \
+curl -L https://github.com/deeeed/capture-helper/releases/latest/download/capture-helper-darwin-universal \
   -o /usr/local/bin/capture-helper
 chmod +x /usr/local/bin/capture-helper
+xattr -d com.apple.quarantine /usr/local/bin/capture-helper 2>/dev/null || true
 ```
+
+If macOS Gatekeeper blocks a curl-downloaded binary, prefer `npm install -g` or
+`brew install deeeed/tap/capture-helper` — those paths do not attach quarantine. For a
+manual download, remove quarantine with `xattr -d` (above) or approve once in System
+Settings → Privacy & Security.
 
 ## Build from source
 
@@ -84,7 +97,12 @@ The npm build script copies the release binary to:
 native/capture-helper
 ```
 
-When installed as an npm package, `postinstall` builds the native backend for the current platform if it's missing: on macOS it builds the Swift binary (`native/capture-helper`); on Linux it compiles the X11 grabber (`native/x11-grabber`) via `gcc`. If the toolchain or dev headers are absent it prints the install command and skips (the install never hard-fails). Set `SITEED_CAPTURE_HELPER_SKIP_POSTINSTALL=1` to skip that step.
+When installed as an npm package, `postinstall` verifies the bundled native binary
+(smoke test + SHA256 checksum). On macOS, if the prebuilt binary is missing or broken
+and Swift is available, it rebuilds from source; otherwise install **fails loudly** with
+the next command to run (`brew install deeeed/tap/capture-helper` or retry npm). On
+Linux it compiles the X11 grabber (`native/x11-grabber`) via `gcc` when possible. Set
+`SITEED_CAPTURE_HELPER_SKIP_POSTINSTALL=1` to skip postinstall.
 
 ## Commands
 

@@ -1,26 +1,21 @@
-# Homebrew tap notes
+# Homebrew tap
 
-A draft formula lives at `Formula/capture-helper.rb`.
-
-To publish it, create or reuse a tap repo, for example:
-
-```bash
-gh repo create deeeed/homebrew-tap --public
-```
-
-Then copy the formula into that tap:
+The canonical formula lives in the tap repo:
 
 ```text
-homebrew-tap/
-  Formula/
-    capture-helper.rb
+deeeed/homebrew-tap/Formula/capture-helper.rb
 ```
 
-Users can then install with:
+Install (auto-taps; no separate `brew tap` step):
 
 ```bash
-brew tap deeeed/tap
-brew install capture-helper
+brew install deeeed/tap/capture-helper
+capture-helper doctor --json
 ```
 
-The current formula is arm64-only and points at the GitHub release binary for the current package version. Update `version`, `url`, and `sha256` for every release.
+The release workflow updates the tap on each tagged release. The formula downloads
+`capture-helper-darwin-universal` from GitHub releases (arm64 + x86_64).
+
+There is no repo-local formula copy in `capture-helper` — the tap is the single source
+of truth. Update `version`, `url`, and `sha256` only in `deeeed/homebrew-tap` (or via the
+release workflow when `HOMEBREW_TAP_TOKEN` is configured).
