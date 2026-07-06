@@ -23,9 +23,11 @@ Example shape:
 
 ### `doctor`
 
-Checks runtime readiness and prints JSON to stdout.
+Checks runtime readiness. Human-readable output is the default; pass `--json` for the
+machine-readable envelope installers and scripts consume.
 
 ```bash
+capture-helper doctor
 capture-helper doctor --json
 ```
 

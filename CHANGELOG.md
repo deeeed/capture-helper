@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Wrapper `doctor` now prints native-style human output (`doctor --human`) or JSON
-  (`doctor` / `doctor --json`) when the bundled binary is missing or broken.
+- `doctor` now defaults to human-readable output on macOS and Linux; pass `--json` for
+  machine-readable output (installers/scripts).
+- Wrapper `doctor` prints the same human or JSON shape when the bundled binary is missing
+  or broken.
 
 ## [0.2.2] - 2026-07-06
 

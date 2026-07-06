@@ -59,18 +59,18 @@ Install globally with npm (primary path used by Farmslot and MetaMask farm insta
 
 ```bash
 npm install -g @siteed/capture-helper
-capture-helper doctor --human
+capture-helper doctor
 ```
 
 Install with Homebrew (auto-taps `deeeed/tap`; no separate tap step):
 
 ```bash
 brew install deeeed/tap/capture-helper
-capture-helper doctor --human
+capture-helper doctor
 ```
 
-Use `doctor --json` when a script or installer needs machine-readable output (Farmslot
-and farm installers parse that form). Humans should prefer `doctor --human`.
+`doctor` prints human-readable output by default. Use `doctor --json` when a script or
+installer needs machine-readable output (Farmslot and farm installers pass `--json`).
 
 Download the native release binary directly:
 
@@ -118,9 +118,9 @@ capture-helper -l
 capture-helper version
 capture-helper --version
 
-# Environment readiness and permissions diagnostics
-capture-helper doctor --human
-capture-helper doctor --json   # machine-readable; default when --json omitted
+# Environment readiness and permissions diagnostics (human-readable by default)
+capture-helper doctor
+capture-helper doctor --json
 # includes stable codes like screen_recording_denied, window_server_unavailable, ffmpeg_missing
 
 # Request/open macOS Screen Recording permissions where possible
@@ -207,7 +207,8 @@ The wrapper resolves the binary in this order:
   - 4-byte start codes: `00 00 00 01`
   - SPS/PPS emitted before keyframes
   - baseline profile, no B-frames
-- `list` / `doctor` / `version`: JSON on stdout by default
+- `doctor`: human-readable by default; `--json` for machine-readable output
+- `list` / `version`: JSON on stdout by default
 - streaming/capture diagnostics: JSON lines on stderr
 - command failures: JSON error lines on stderr with stable `code` values such as `target_required` and `window_not_found`
 - signal handling: `SIGINT`/`SIGTERM` perform cleanup for direct capture; `record --duration` stops automatically

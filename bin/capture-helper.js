@@ -18,7 +18,6 @@ const args = process.argv.slice(2);
 const UPDATE_CHECK_DISABLED = args.includes('--no-update-check');
 const childArgs = args.filter((a) => a !== '--no-update-check');
 const wantsJson = childArgs.includes('--json');
-const wantsHuman = childArgs.includes('--human') || childArgs.includes('--text') || childArgs.includes('-H');
 const primaryCommand = childArgs.find((a) => !a.startsWith('-')) || null;
 
 // macOS uses the native Swift binary (ScreenCaptureKit). Other platforms use the
@@ -84,11 +83,10 @@ function isNpmPackageInstall(root) {
 
 function handleBrokenNative(assessment) {
   if (primaryCommand === 'doctor') {
-    if (wantsHuman) {
-      process.stdout.write(wrapperDoctorHuman(assessment));
-    } else {
-      // Match native doctor default: JSON unless --human/--text/-H is set.
+    if (wantsJson) {
       process.stdout.write(`${JSON.stringify(wrapperDoctorPayload(assessment, PKG.version))}\n`);
+    } else {
+      process.stdout.write(wrapperDoctorHuman(assessment));
     }
     process.exit(1);
   }

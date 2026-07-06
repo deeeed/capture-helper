@@ -40,6 +40,18 @@ final class CaptureHelperTests: XCTestCase {
     }
 
 
+    func testDoctorDefaultsToHumanOutput() throws {
+        let result = try runHelper(["doctor"])
+
+        XCTAssertTrue(
+            result.stdout.hasPrefix("capture-helper doctor: OK\n") ||
+            result.stdout.hasPrefix("capture-helper doctor: FAILED\n"),
+            result.stdout
+        )
+        XCTAssertTrue(result.stdout.contains("[OK]") || result.stdout.contains("[FAIL]"), result.stdout)
+        XCTAssertFalse(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{"), result.stdout)
+    }
+
     func testDoctorProducesStableCheckCodesAndSummary() throws {
         let result = try runHelper(["doctor", "--json"])
 
