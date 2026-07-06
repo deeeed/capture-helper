@@ -13,10 +13,11 @@ if [ ! -f "$bin" ]; then
 fi
 
 identity="${CAPTURE_HELPER_CODESIGN_IDENTITY:--}"
-extra=()
 if [ -n "${CAPTURE_HELPER_CODESIGN_KEYCHAIN:-}" ]; then
-  extra+=(--keychain "$CAPTURE_HELPER_CODESIGN_KEYCHAIN")
+  codesign --force --options runtime --timestamp=none \
+    --keychain "$CAPTURE_HELPER_CODESIGN_KEYCHAIN" \
+    -s "$identity" "$bin"
+else
+  codesign --force --options runtime --timestamp=none -s "$identity" "$bin"
 fi
-
-codesign --force --options runtime --timestamp=none "${extra[@]}" -s "$identity" "$bin"
 codesign -dv --verbose=2 "$bin" >&2

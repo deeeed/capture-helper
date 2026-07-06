@@ -75,10 +75,11 @@ jobs:
             echo "expected doctor to fail when native binary is missing" >&2
             exit 1
           fi
-          capture-helper doctor --json 2>/dev/null | python3 - <<'PY'
-import json, sys
-doc = json.load(sys.stdin)
-assert doc["ok"] is False
-assert "native_binary_missing" in doc["summary"]["requiredFailureCodes"]
-assert doc["teach"]["brew"] == "brew install deeeed/tap/capture-helper"
-PY
+          BROKEN_JSON="$(capture-helper doctor --json 2>/dev/null || true)"
+          printf '%s' "$BROKEN_JSON" | python3 -c '
+          import json, sys
+          doc = json.load(sys.stdin)
+          assert doc["ok"] is False
+          assert "native_binary_missing" in doc["summary"]["requiredFailureCodes"]
+          assert doc["teach"]["brew"] == "brew install deeeed/tap/capture-helper"
+          '
