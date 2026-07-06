@@ -85,11 +85,15 @@ function wrapperDoctorHuman(assessment) {
   ];
   if (assessment?.path) lines.push(`  path: ${assessment.path}`);
   if (assessment?.detail) lines.push(`  detail: ${assessment.detail}`);
+  if (assessment?.override) {
+    lines.push(`  override: ${assessment.override} is set but not usable`);
+    lines.push(`  unset ${assessment.override}`);
+  }
   lines.push('', 'To fix:');
   lines.push(`  - ${TEACH_BREW}`);
   lines.push(`  - ${TEACH_NPM}`);
   lines.push(`  - from source: ${TEACH_BUILD}`);
-  lines.push('  - override: SITEED_CAPTURE_HELPER_BIN=/path/to/capture-helper');
+  lines.push('  - or clear stale overrides: unset CAPTURE_HELPER_PATH SITEED_CAPTURE_HELPER_BIN');
   return `${lines.join('\n')}\n`;
 }
 

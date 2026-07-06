@@ -37,6 +37,9 @@ if (NODE_BACKEND_PLATFORMS.has(process.platform)) {
   if (!resolution.ok) {
     handleBrokenNative(resolution.assessment);
   }
+  if (resolution.staleOverride) {
+    warnStaleOverride(resolution.staleOverride);
+  }
 
   const result = spawnSync(resolution.path, childArgs, { stdio: 'inherit' });
   if (result.error) { console.error(result.error.message); process.exit(1); }
@@ -44,14 +47,25 @@ if (NODE_BACKEND_PLATFORMS.has(process.platform)) {
 }
 
 function resolveDarwinBinary() {
-  if (process.env.SITEED_CAPTURE_HELPER_BIN) {
-    const overrideAssessment = assessNativeBinary(ROOT, process.env.SITEED_CAPTURE_HELPER_BIN);
-    if (overrideAssessment.ok) return { ok: true, path: process.env.SITEED_CAPTURE_HELPER_BIN };
-    return { ok: false, assessment: overrideAssessment };
-  }
-
   const packageNative = join(ROOT, 'native', 'capture-helper');
   const packageAssessment = assessNativeBinary(ROOT, packageNative);
+
+  for (const { key, path } of envOverrideCandidates()) {
+    const overrideAssessment = assessNativeBinary(ROOT, path);
+    if (overrideAssessment.ok) return { ok: true, path };
+    if (packageAssessment.ok) {
+      return {
+        ok: true,
+        path: packageNative,
+        staleOverride: { key, path, assessment: overrideAssessment },
+      };
+    }
+    return {
+      ok: false,
+      assessment: { ...overrideAssessment, override: key },
+    };
+  }
+
   if (packageAssessment.ok) return { ok: true, path: packageNative };
 
   // Installed npm package: do not mask a broken/missing bundled binary with an unrelated
@@ -79,6 +93,21 @@ function resolveDarwinBinary() {
 
 function isNpmPackageInstall(root) {
   return root.includes(join('node_modules', '@siteed', 'capture-helper'));
+}
+
+function envOverrideCandidates() {
+  return [
+    { key: 'CAPTURE_HELPER_PATH', path: process.env.CAPTURE_HELPER_PATH },
+    { key: 'SITEED_CAPTURE_HELPER_BIN', path: process.env.SITEED_CAPTURE_HELPER_BIN },
+  ].filter((entry) => entry.path);
+}
+
+function warnStaleOverride({ key, path, assessment }) {
+  const cmd = primaryCommand;
+  if (cmd !== 'doctor' && cmd !== 'version') return;
+  process.stderr.write(
+    `capture-helper: ignoring stale ${key}=${path} (${assessment.reason || 'broken'}); using bundled binary. Unset with: unset ${key}\n`,
+  );
 }
 
 function handleBrokenNative(assessment) {
