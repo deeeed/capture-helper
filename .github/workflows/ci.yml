@@ -20,7 +20,7 @@ jobs:
           node --version
           npm --version
       - name: Swift build
-        run: swift build -c release
+        run: swift build -c release --arch arm64 --arch x86_64
       - name: Swift test
         run: swift test
       - name: Build npm native artifact
@@ -33,5 +33,52 @@ jobs:
           # GitHub-hosted runners may not grant Screen Recording permission, so list is opportunistic.
           node bin/capture-helper.js list --json >/tmp/capture-helper-windows.json || true
           if [ -s /tmp/capture-helper-windows.json ]; then python3 -m json.tool /tmp/capture-helper-windows.json >/dev/null; fi
+      - name: JavaScript tests
+        run: npm run test:js
       - name: npm pack dry run
         run: npm pack --dry-run
+      - name: Report codesign state
+        run: |
+          codesign -dv --verbose=2 native/capture-helper
+          spctl -a -vv native/capture-helper || true
+
+  npm-install-smoke:
+    name: npm pack install without Swift
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build release artifact for pack
+        run: npm run build:native
+      - name: Pack and install globally without Swift on PATH
+        run: |
+          set -euo pipefail
+          stub_bin="$(mktemp -d)"
+          printf '#!/bin/sh\necho "swift disabled for smoke test" >&2\nexit 1\n' > "${stub_bin}/swift"
+          chmod +x "${stub_bin}/swift"
+          export PATH="${stub_bin}:${PATH}"
+          swift --version && { echo "expected stub swift to run for smoke test" >&2; exit 1; }
+          npm pack
+          tgz="$(ls -1 siteed-capture-helper-*.tgz | head -1)"
+          npm install -g "./${tgz}"
+          capture-helper version
+          capture-helper doctor --json | python3 -m json.tool >/dev/null
+      - name: Broken-binary doctor teaches when native binary is removed
+        run: |
+          set -euo pipefail
+          stub_bin="$(mktemp -d)"
+          printf '#!/bin/sh\nexit 1\n' > "${stub_bin}/swift"
+          chmod +x "${stub_bin}/swift"
+          export PATH="${stub_bin}:${PATH}"
+          pkg_root="$(npm root -g)/@siteed/capture-helper"
+          mv "${pkg_root}/native/capture-helper" "${pkg_root}/native/capture-helper.bak"
+          if capture-helper doctor --json; then
+            echo "expected doctor to fail when native binary is missing" >&2
+            exit 1
+          fi
+          capture-helper doctor --json 2>/dev/null | python3 - <<'PY'
+import json, sys
+doc = json.load(sys.stdin)
+assert doc["ok"] is False
+assert "native_binary_missing" in doc["summary"]["requiredFailureCodes"]
+assert doc["teach"]["brew"] == "brew install deeeed/tap/capture-helper"
+PY

@@ -18,22 +18,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build release
+        run: npm run build:native
+      - name: Package release assets
         run: |
-          swift build -c release
           mkdir -p dist
-          cp .build/release/capture-helper dist/capture-helper-darwin-arm64
-          shasum -a 256 dist/capture-helper-darwin-arm64 > dist/SHA256SUMS
+          cp native/capture-helper dist/capture-helper-darwin-universal
+          cp native/capture-helper.sha256 dist/capture-helper-darwin-universal.sha256
+          shasum -a 256 dist/capture-helper-darwin-universal > dist/SHA256SUMS
+          codesign -dv --verbose=2 dist/capture-helper-darwin-universal
+          spctl -a -vv dist/capture-helper-darwin-universal || true
       - name: Upload GitHub release assets
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            dist/capture-helper-darwin-arm64
+            dist/capture-helper-darwin-universal
+            dist/capture-helper-darwin-universal.sha256
             dist/SHA256SUMS
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: capture-helper-darwin-arm64
+          name: capture-helper-darwin-universal
           path: dist/
 
   npm:
@@ -71,7 +76,7 @@ jobs:
         if: env.HOMEBREW_TAP_TOKEN != ''
         uses: actions/download-artifact@v4
         with:
-          name: capture-helper-darwin-arm64
+          name: capture-helper-darwin-universal
           path: dist
       - name: Checkout tap
         if: env.HOMEBREW_TAP_TOKEN != ''
@@ -85,7 +90,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          sha="$(shasum -a 256 dist/capture-helper-darwin-arm64 | awk '{print $1}')"
+          sha="$(shasum -a 256 dist/capture-helper-darwin-universal | awk '{print $1}')"
           formula="homebrew-tap/Formula/capture-helper.rb"
           python3 - "$formula" "$version" "$sha" <<'PY'
           import re
@@ -97,8 +102,8 @@ jobs:
           sha = sys.argv[3]
           text = formula.read_text()
           text = re.sub(
-              r'releases/download/v[0-9]+\.[0-9]+\.[0-9]+/capture-helper-darwin-arm64',
-              f'releases/download/v{version}/capture-helper-darwin-arm64',
+              r'releases/download/v[0-9]+\.[0-9]+\.[0-9]+/capture-helper-darwin-(?:arm64|universal)',
+              f'releases/download/v{version}/capture-helper-darwin-universal',
               text,
           )
           text = re.sub(r'version "[^"]+"', f'version "{version}"', text)

@@ -56,7 +56,9 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
             sawCommand = true
             i += 1
         case "doctor":
-            cfg.command = .doctor; sawCommand = true; i += 1
+            cfg.command = .doctor
+            cfg.json = false
+            sawCommand = true; i += 1
         case "record":
             cfg.command = .record; sawCommand = true; i += 1
         case "resolve":
@@ -184,7 +186,7 @@ func exitUsage() -> Never {
       capture-helper snapshot [target options] --output PATH
       capture-helper list [--json | --json-lines]
       capture-helper -l
-      capture-helper doctor [--json] [--open-permissions]
+      capture-helper doctor [--json] [--open-permissions]   (human output by default)
       capture-helper permissions [--status-only | --open-permissions] [--request-permission]
       capture-helper version
 
@@ -223,8 +225,8 @@ func exitUsage() -> Never {
       --status-only           Only report permission state; do not request/open
 
     Output options:
-      --json                  Machine-readable JSON output (default)
-      --human, --text, -H     Human-readable output for supported commands
+      --json                  Machine-readable JSON output
+      --human, --text, -H     Human-readable output (doctor default)
       -h                      Human output after list/doctor/permissions/version; help otherwise
       -l                      Shortcut for `list --human`
       --json-lines, --jsonl   JSON-lines output for list

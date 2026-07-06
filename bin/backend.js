@@ -138,7 +138,7 @@ function parseArgs(argv) {
       case 'capture': cfg.command = 'capture'; sawCommand = true; i++; break;
       case 'stream': cfg.command = 'capture'; cfg.framed = true; sawCommand = true; i++; break;
       case 'list': case 'windows': cfg.command = 'list'; sawCommand = true; i++; break;
-      case 'doctor': cfg.command = 'doctor'; sawCommand = true; i++; break;
+      case 'doctor': cfg.command = 'doctor'; cfg.json = false; sawCommand = true; i++; break;
       case 'record': cfg.command = 'record'; sawCommand = true; i++; break;
       case 'resolve': cfg.command = 'resolve'; sawCommand = true; i++; break;
       case 'snapshot': cfg.command = 'snapshot'; sawCommand = true; i++; break;

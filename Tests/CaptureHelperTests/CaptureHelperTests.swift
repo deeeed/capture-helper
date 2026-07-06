@@ -14,7 +14,7 @@ final class CaptureHelperTests: XCTestCase {
         let object = try parseJSONObject(result.stdout)
         XCTAssertEqual(object["name"] as? String, "@siteed/capture-helper")
         XCTAssertEqual(object["binary"] as? String, "capture-helper")
-        XCTAssertEqual(object["version"] as? String, "0.2.1")
+        XCTAssertEqual(object["version"] as? String, "0.2.2")
         XCTAssertNotNil(object["architecture"])
         XCTAssertNotNil(object["osVersion"])
     }
@@ -39,6 +39,18 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: value), value)
     }
 
+
+    func testDoctorDefaultsToHumanOutput() throws {
+        let result = try runHelper(["doctor"])
+
+        XCTAssertTrue(
+            result.stdout.hasPrefix("capture-helper doctor: OK\n") ||
+            result.stdout.hasPrefix("capture-helper doctor: FAILED\n"),
+            result.stdout
+        )
+        XCTAssertTrue(result.stdout.contains("[OK]") || result.stdout.contains("[FAIL]"), result.stdout)
+        XCTAssertFalse(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{"), result.stdout)
+    }
 
     func testDoctorProducesStableCheckCodesAndSummary() throws {
         let result = try runHelper(["doctor", "--json"])
@@ -112,14 +124,14 @@ final class CaptureHelperTests: XCTestCase {
         let result = try runHelper(["version", "--human"])
 
         XCTAssertEqual(result.status, 0, result.stderr)
-        XCTAssertEqual(result.stdout, "capture-helper 0.2.1\n")
+        XCTAssertEqual(result.stdout, "capture-helper 0.2.2\n")
     }
 
     func testVersionSupportsShortHumanOutput() throws {
         let result = try runHelper(["version", "-h"])
 
         XCTAssertEqual(result.status, 0, result.stderr)
-        XCTAssertEqual(result.stdout, "capture-helper 0.2.1\n")
+        XCTAssertEqual(result.stdout, "capture-helper 0.2.2\n")
     }
 
     func testHelpCommandShowsUsage() throws {
