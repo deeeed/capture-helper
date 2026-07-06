@@ -53,38 +53,48 @@ function verifyBundledChecksum(root, binaryPath) {
   return { ok: false, expected, actual };
 }
 
-function teachMessage(assessment) {
-  const reason = assessment?.reason || 'broken';
-  const lines = ['capture-helper native binary is not usable on this machine.'];
-  if (reason === 'arch_mismatch') {
-    lines.push('The bundled binary does not match your CPU architecture.');
-  } else if (reason === 'checksum_mismatch') {
-    lines.push('The bundled binary failed checksum verification (file may be corrupted).');
-  } else if (reason === 'missing') {
-    lines.push('No working native binary was found in the package.');
-  } else {
-    lines.push('The native binary failed its version check.');
-  }
-  if (assessment?.detail) lines.push(`Detail: ${assessment.detail}`);
-  lines.push('');
-  lines.push('Next: try one of these install paths:');
-  lines.push(`  ${TEACH_BREW}`);
-  lines.push(`  ${TEACH_NPM}`);
-  lines.push('');
-  lines.push('From a git checkout with Xcode/Swift installed:');
-  lines.push(`  ${TEACH_BUILD}`);
-  lines.push('');
-  lines.push('Override path: SITEED_CAPTURE_HELPER_BIN=/path/to/capture-helper');
-  return lines.join('\n');
-}
-
-function wrapperDoctorPayload(assessment, pkgVersion) {
+function nativeBinaryDoctorCheck(assessment) {
   const reason = assessment?.reason || 'broken';
   const code = reason === 'missing' ? 'native_binary_missing' : 'native_binary_broken';
   let message = 'native binary is present but not executable or failed version check';
   if (reason === 'missing') message = 'native binary was not found';
   else if (reason === 'arch_mismatch') message = 'native binary architecture does not match this host';
   else if (reason === 'checksum_mismatch') message = 'native binary failed checksum verification';
+  else if (reason === 'version_failed' || reason === 'invalid_output' || reason === 'exec_failed') {
+    message = 'native binary failed version check';
+  }
+  return { code, message };
+}
+
+function teachMessage(assessment) {
+  const { message } = nativeBinaryDoctorCheck(assessment);
+  const lines = [`capture-helper install failed: ${message}.`];
+  if (assessment?.detail) lines.push(`Detail: ${assessment.detail}`);
+  lines.push('', 'Next:');
+  lines.push(`  ${TEACH_BREW}`);
+  lines.push(`  ${TEACH_NPM}`);
+  lines.push(`  ${TEACH_BUILD}`);
+  return lines.join('\n');
+}
+
+function wrapperDoctorHuman(assessment) {
+  const { code, message } = nativeBinaryDoctorCheck(assessment);
+  const lines = [
+    'capture-helper doctor: FAILED',
+    `[FAIL] native binary (${code}) — ${message}`,
+  ];
+  if (assessment?.path) lines.push(`  path: ${assessment.path}`);
+  if (assessment?.detail) lines.push(`  detail: ${assessment.detail}`);
+  lines.push('', 'To fix:');
+  lines.push(`  - ${TEACH_BREW}`);
+  lines.push(`  - ${TEACH_NPM}`);
+  lines.push(`  - from source: ${TEACH_BUILD}`);
+  lines.push('  - override: SITEED_CAPTURE_HELPER_BIN=/path/to/capture-helper');
+  return `${lines.join('\n')}\n`;
+}
+
+function wrapperDoctorPayload(assessment, pkgVersion) {
+  const { code, message } = nativeBinaryDoctorCheck(assessment);
 
   return {
     type: 'doctor',
@@ -154,7 +164,9 @@ module.exports = {
   hasSwiftToolchain,
   sha256File,
   verifyBundledChecksum,
+  nativeBinaryDoctorCheck,
   teachMessage,
+  wrapperDoctorHuman,
   wrapperDoctorPayload,
   findSwiftBuildOutput,
   assessNativeBinary,

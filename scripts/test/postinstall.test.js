@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   decidePostinstallOutcome,
   teachMessage,
+  wrapperDoctorHuman,
   wrapperDoctorPayload,
 } = require('../lib/native-binary');
 
@@ -54,4 +55,11 @@ test('wrapperDoctorPayload reports native_binary_broken for arch mismatch', () =
   const payload = wrapperDoctorPayload({ reason: 'arch_mismatch', path: '/tmp/bin' }, '0.2.2');
   assert.equal(payload.checks[0].code, 'native_binary_broken');
   assert.match(payload.checks[0].message, /architecture/);
+});
+
+test('wrapperDoctorHuman matches native doctor plain output shape', () => {
+  const text = wrapperDoctorHuman({ reason: 'missing', path: '/tmp/native/capture-helper' });
+  assert.match(text, /^capture-helper doctor: FAILED\n/);
+  assert.match(text, /\[FAIL\] native binary \(native_binary_missing\)/);
+  assert.match(text, /To fix:\n  - brew install deeeed\/tap\/capture-helper/);
 });

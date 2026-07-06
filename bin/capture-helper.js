@@ -7,6 +7,7 @@ const https = require('node:https');
 const {
   assessNativeBinary,
   teachMessage,
+  wrapperDoctorHuman,
   wrapperDoctorPayload,
 } = require('../scripts/lib/native-binary');
 
@@ -17,6 +18,7 @@ const args = process.argv.slice(2);
 const UPDATE_CHECK_DISABLED = args.includes('--no-update-check');
 const childArgs = args.filter((a) => a !== '--no-update-check');
 const wantsJson = childArgs.includes('--json');
+const wantsHuman = childArgs.includes('--human') || childArgs.includes('--text') || childArgs.includes('-H');
 const primaryCommand = childArgs.find((a) => !a.startsWith('-')) || null;
 
 // macOS uses the native Swift binary (ScreenCaptureKit). Other platforms use the
@@ -81,12 +83,13 @@ function isNpmPackageInstall(root) {
 }
 
 function handleBrokenNative(assessment) {
-  if (primaryCommand === 'doctor' && wantsJson) {
-    process.stdout.write(`${JSON.stringify(wrapperDoctorPayload(assessment, PKG.version))}\n`);
-    process.exit(1);
-  }
   if (primaryCommand === 'doctor') {
-    process.stderr.write(`${teachMessage(assessment)}\n`);
+    if (wantsHuman) {
+      process.stdout.write(wrapperDoctorHuman(assessment));
+    } else {
+      // Match native doctor default: JSON unless --human/--text/-H is set.
+      process.stdout.write(`${JSON.stringify(wrapperDoctorPayload(assessment, PKG.version))}\n`);
+    }
     process.exit(1);
   }
   process.stderr.write(`${teachMessage(assessment)}\n`);

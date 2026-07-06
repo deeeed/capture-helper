@@ -59,15 +59,18 @@ Install globally with npm (primary path used by Farmslot and MetaMask farm insta
 
 ```bash
 npm install -g @siteed/capture-helper
-capture-helper doctor --json
+capture-helper doctor --human
 ```
 
 Install with Homebrew (auto-taps `deeeed/tap`; no separate tap step):
 
 ```bash
 brew install deeeed/tap/capture-helper
-capture-helper doctor --json
+capture-helper doctor --human
 ```
+
+Use `doctor --json` when a script or installer needs machine-readable output (Farmslot
+and farm installers parse that form). Humans should prefer `doctor --human`.
 
 Download the native release binary directly:
 
@@ -116,7 +119,8 @@ capture-helper version
 capture-helper --version
 
 # Environment readiness and permissions diagnostics
-capture-helper doctor --json
+capture-helper doctor --human
+capture-helper doctor --json   # machine-readable; default when --json omitted
 # includes stable codes like screen_recording_denied, window_server_unavailable, ffmpeg_missing
 
 # Request/open macOS Screen Recording permissions where possible
