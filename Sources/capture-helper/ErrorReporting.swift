@@ -66,6 +66,7 @@ func screenRecordingDeniedMessage() -> String {
 func screenRecordingRemediation() -> [String] {
     [
         "Open System Settings > Privacy & Security > Screen & System Audio Recording.",
+        "Enable the app that launches capture-helper; if a UI app is failing, enable that app, not Terminal.",
         "If running from Terminal/iTerm/Codex locally, enable the terminal app.",
         "If running over SSH, enable /usr/libexec/sshd-keygen-wrapper.",
         "Then restart the launcher and run capture-helper doctor --json."

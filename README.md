@@ -221,6 +221,14 @@ Grant Screen Recording permission to the terminal app, IDE, or agent host that l
 
 **System Settings → Privacy & Security → Screen & System Audio Recording**
 
+Open that pane from the CLI with:
+
+```bash
+capture-helper doctor --request-permission --open-permissions
+```
+
+macOS grants Screen Recording to the app that launched `capture-helper`. If a desktop UI or agent host is failing but Terminal passes `doctor`, enable the desktop UI or agent host in System Settings, then restart that app.
+
 After granting permission, restart the launching app. Use this to check readiness:
 
 ```bash

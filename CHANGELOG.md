@@ -7,14 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-07
+
+### Fixed
+
+- `doctor --request-permission --open-permissions` now requests Screen Recording access
+  before readiness checks and always opens the macOS permission pane when requested,
+  making first-run setup work from the app that launches `capture-helper`.
+- `screen_recording_denied` doctor failures now include launcher and remediation details
+  so integrations can tell users to enable the failing app instead of Terminal.
+
+## [0.2.2] - 2026-07-06
+
 ### Changed
 
 - `doctor` now defaults to human-readable output on macOS and Linux; pass `--json` for
   machine-readable output (installers/scripts).
 - Wrapper `doctor` prints the same human or JSON shape when the bundled binary is missing
   or broken.
-
-## [0.2.2] - 2026-07-06
 
 ### Fixed
 
@@ -89,7 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Earlier 0.1.x releases: native MP4 recording, human-readable CLI output, window
   discovery, capture, snapshot, and streaming on macOS (ScreenCaptureKit).
 
-[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/deeeed/capture-helper/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/deeeed/capture-helper/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/deeeed/capture-helper/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/deeeed/capture-helper/compare/v0.1.8...v0.2.0

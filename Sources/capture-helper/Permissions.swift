@@ -59,8 +59,7 @@ func runPermissionsWorkflow(request: Bool, openSettings: Bool) -> PermissionsRes
         requestGranted = CGRequestScreenCaptureAccess()
     }
 
-    let grantedAfterRequest = CGPreflightScreenCaptureAccess()
-    if openSettings && !grantedAfterRequest {
+    if openSettings {
         settingsOpened = openScreenRecordingSettings()
     }
 
@@ -68,7 +67,7 @@ func runPermissionsWorkflow(request: Bool, openSettings: Bool) -> PermissionsRes
         grantedBefore: grantedBefore,
         requestAttempted: request && !grantedBefore,
         requestGranted: requestGranted,
-        settingsOpenAttempted: openSettings && !grantedAfterRequest,
+        settingsOpenAttempted: openSettings,
         settingsOpened: settingsOpened,
         grantedAfter: CGPreflightScreenCaptureAccess(),
         launcher: launcherPermissionHint(),

@@ -186,7 +186,7 @@ func exitUsage() -> Never {
       capture-helper snapshot [target options] --output PATH
       capture-helper list [--json | --json-lines]
       capture-helper -l
-      capture-helper doctor [--json] [--open-permissions]   (human output by default)
+      capture-helper doctor [--json] [--request-permission] [--open-permissions]   (human output by default)
       capture-helper permissions [--status-only | --open-permissions] [--request-permission]
       capture-helper version
 

@@ -42,6 +42,12 @@ struct DoctorCheck {
 }
 
 func runDoctor(json: Bool) async {
+    let permissionsResult = Runtime.config.requestPermissions || Runtime.config.openPermissions
+        ? runPermissionsWorkflow(
+            request: Runtime.config.requestPermissions || Runtime.config.openPermissions,
+            openSettings: Runtime.config.openPermissions
+        )
+        : nil
     let checks = await doctorChecks()
     let ok = checks.allSatisfy { $0.ok || !$0.required }
     var result: [String: Any] = [
@@ -51,8 +57,8 @@ func runDoctor(json: Bool) async {
         "checks": checks.map { $0.object() },
         "summary": doctorSummary(checks)
     ]
-    if Runtime.config.openPermissions && checks.contains(where: { $0.code == DoctorCode.screenRecordingDenied }) {
-        result["permissions"] = runPermissionsWorkflow(request: true, openSettings: true).object()
+    if let permissionsResult {
+        result["permissions"] = permissionsResult.object()
     }
 
     if json {
@@ -72,6 +78,10 @@ func runDoctor(json: Bool) async {
             for line in screenRecordingRemediation() {
                 writeString("  - \(line)\n")
             }
+        }
+        if let permissionsResult {
+            let status = permissionsResult.settingsOpened == true ? "opened" : "could not be opened"
+            writeString("\nScreen Recording settings \(status). If another app is failing, enable that app in System Settings, not this terminal, then restart it.\n")
         }
     }
 
@@ -169,9 +179,18 @@ func windowEnumerationCheck() async -> DoctorCheck {
             required: true,
             message: classification.message,
             value: nil,
-            details: ["error": "\(error)"]
+            details: screenRecordingDetails(error: error, code: classification.code)
         )
     }
+}
+
+func screenRecordingDetails(error: Error, code: String) -> [String: Any] {
+    var details: [String: Any] = ["error": "\(error)"]
+    if code == DoctorCode.screenRecordingDenied {
+        details["launcher"] = launcherPermissionHint()
+        details["remediation"] = screenRecordingRemediation()
+    }
+    return details
 }
 
 func classifyWindowEnumerationError(_ error: Error) -> (code: String, message: String) {
