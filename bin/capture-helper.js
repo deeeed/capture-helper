@@ -47,8 +47,11 @@ function dispatch(executable, executableArgs) {
   let forwardedSignal = null;
 
   const forward = (signal) => {
+    const shouldForceExit = forwardedSignal !== null;
     forwardedSignal = signal;
-    if (child.exitCode === null && child.signalCode === null) child.kill(signal);
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill(shouldForceExit ? 'SIGKILL' : signal);
+    }
   };
   const onSigint = () => forward('SIGINT');
   const onSigterm = () => forward('SIGTERM');

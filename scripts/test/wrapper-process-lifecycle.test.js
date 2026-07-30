@@ -6,6 +6,7 @@ const {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } = require('node:fs');
@@ -15,6 +16,8 @@ const { spawn } = require('node:child_process');
 
 test('wrapper forwards termination signals to the dispatched binary', async () => {
   const root = mkdtempSync(join(tmpdir(), 'capture-helper-wrapper-'));
+  let wrapper;
+  let childPid;
   try {
     mkdirSync(join(root, 'bin'), { recursive: true });
     mkdirSync(join(root, 'native'), { recursive: true });
@@ -30,7 +33,6 @@ test('wrapper forwards termination signals to the dispatched binary', async () =
     );
 
     const ready = join(root, 'ready');
-    const terminated = join(root, 'terminated');
     if (process.platform === 'darwin') {
       const native = join(root, 'native', 'capture-helper');
       writeFileSync(
@@ -40,9 +42,9 @@ if [ "\${1:-}" = version ]; then
   printf '%s\\n' '{"version":"0.0.0-test"}'
   exit 0
 fi
-printf ready > "$TEST_READY"
+printf '%s' "$$" > "$TEST_READY"
 trap ':' TERM
-trap 'printf terminated > "$TEST_TERMINATED"; exit 0' INT
+trap ':' INT
 while :; do sleep 1; done
 `,
       );
@@ -51,38 +53,41 @@ while :; do sleep 1; done
       writeFileSync(
         join(root, 'bin', 'backend.js'),
         `const fs = require('node:fs');
-fs.writeFileSync(process.env.TEST_READY, 'ready');
+fs.writeFileSync(process.env.TEST_READY, String(process.pid));
 process.on('SIGTERM', () => {});
-process.on('SIGINT', () => {
-  fs.writeFileSync(process.env.TEST_TERMINATED, 'terminated');
-  process.exit(0);
-});
+process.on('SIGINT', () => {});
 setInterval(() => {}, 1000);
 `,
       );
     }
 
-    const wrapper = spawn(
+    wrapper = spawn(
       process.execPath,
       [join(root, 'bin', 'capture-helper.js'), 'hold', '--no-update-check'],
       {
-        env: { ...process.env, TEST_READY: ready, TEST_TERMINATED: terminated },
+        env: { ...process.env, TEST_READY: ready },
         stdio: 'ignore',
       },
     );
     await waitFor(() => existsSync(ready), 3000);
+    childPid = Number(readFileSync(ready, 'utf8'));
     wrapper.kill('SIGTERM');
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(wrapper.exitCode, null);
     wrapper.kill('SIGINT');
-    const exit = await new Promise((resolve, reject) => {
-      wrapper.once('error', reject);
-      wrapper.once('exit', (code, signal) => resolve({ code, signal }));
-    });
+    const exit = await waitForExit(wrapper, 3000);
 
     assert.deepEqual(exit, { code: 130, signal: null });
-    assert.equal(existsSync(terminated), true);
+    await waitFor(() => !isProcessAlive(childPid), 3000);
   } finally {
+    if (wrapper && wrapper.exitCode === null && wrapper.signalCode === null) {
+      wrapper.kill('SIGKILL');
+    }
+    if (childPid && isProcessAlive(childPid)) {
+      try {
+        process.kill(childPid, 'SIGKILL');
+      } catch {}
+    }
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -94,5 +99,34 @@ async function waitFor(predicate, timeoutMs) {
       throw new Error(`Timed out after ${timeoutMs}ms.`);
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
+  }
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error(`Timed out waiting ${timeoutMs}ms for wrapper exit.`)),
+      timeoutMs,
+    );
+    child.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once('exit', (code, signal) => {
+      clearTimeout(timeout);
+      resolve({ code, signal });
+    });
+  });
+}
+
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
   }
 }
