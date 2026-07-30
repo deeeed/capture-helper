@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 const os = require('node:os');
@@ -29,9 +29,7 @@ const primaryCommand = childArgs.find((a) => !a.startsWith('-')) || null;
 const NODE_BACKEND_PLATFORMS = new Set(['linux', 'win32']);
 if (NODE_BACKEND_PLATFORMS.has(process.platform)) {
   const backend = join(__dirname, 'backend.js');
-  const result = spawnSync(process.execPath, [backend, ...childArgs], { stdio: 'inherit' });
-  if (result.error) { console.error(result.error.message); process.exit(1); }
-  finish(result.status);
+  dispatch(process.execPath, [backend, ...childArgs]);
 } else {
   const resolution = resolveDarwinBinary();
   if (!resolution.ok) {
@@ -41,9 +39,46 @@ if (NODE_BACKEND_PLATFORMS.has(process.platform)) {
     warnStaleOverride(resolution.staleOverride);
   }
 
-  const result = spawnSync(resolution.path, childArgs, { stdio: 'inherit' });
-  if (result.error) { console.error(result.error.message); process.exit(1); }
-  finish(result.status);
+  dispatch(resolution.path, childArgs);
+}
+
+function dispatch(executable, executableArgs) {
+  const child = spawn(executable, executableArgs, { stdio: 'inherit' });
+  let forwardedSignal = null;
+
+  const forward = (signal) => {
+    const shouldForceExit = forwardedSignal !== null;
+    forwardedSignal = signal;
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill(shouldForceExit ? 'SIGKILL' : signal);
+    }
+  };
+  const onSigint = () => forward('SIGINT');
+  const onSigterm = () => forward('SIGTERM');
+  const onSighup = () => forward('SIGHUP');
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
+  process.on('SIGHUP', onSighup);
+
+  child.once('error', (error) => {
+    removeSignalHandlers();
+    console.error(error.message);
+    process.exit(1);
+  });
+  child.once('exit', (code, signal) => {
+    removeSignalHandlers();
+    if (signal) {
+      process.exitCode = 128 + (os.constants.signals[forwardedSignal || signal] ?? 1);
+      return;
+    }
+    finish(code);
+  });
+
+  function removeSignalHandlers() {
+    process.removeListener('SIGINT', onSigint);
+    process.removeListener('SIGTERM', onSigterm);
+    process.removeListener('SIGHUP', onSighup);
+  }
 }
 
 function resolveDarwinBinary() {

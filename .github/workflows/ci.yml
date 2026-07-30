@@ -61,7 +61,8 @@ jobs:
           tgz="$(ls -1 siteed-capture-helper-*.tgz | head -1)"
           npm install -g "./${tgz}"
           capture-helper version
-          capture-helper doctor --json | python3 -m json.tool >/dev/null
+          capture-helper doctor --json >/tmp/capture-helper-installed-doctor.json || true
+          python3 -m json.tool /tmp/capture-helper-installed-doctor.json >/dev/null
       - name: Broken-binary doctor teaches when native binary is removed
         run: |
           set -euo pipefail

@@ -71,7 +71,14 @@ func runRecord(_ config: Config) async throws {
         logEvent(("type", "record_waiting"), ("message", "Recording; press Ctrl-C to stop"))
     }
     await waitForRecordStop(duration: config.durationSeconds, delegate: delegate)
-    try await stopStream(stream)
+    do {
+        try await stopStream(stream)
+    } catch {
+        if let streamError = delegate.streamFailure() {
+            throw streamError
+        }
+        throw error
+    }
     try await delegate.finish()
 
     let size = (try? fm.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?.intValue ?? 0
@@ -106,6 +113,8 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     private var didFinish = false
     private var frameCount = 0
     private var streamError: Error?
+    private var stopHandler: (() -> Void)?
+    private let stopLock = NSLock()
     private let latestFrameLock = NSLock()
     private var latestPixelBuffer: CVPixelBuffer?
 
@@ -153,8 +162,26 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
+        stopLock.lock()
         streamError = error
+        let stop = stopHandler
+        stopLock.unlock()
         logErrorMessage(code: "stream_stopped", message: "record stream stopped: \(error)")
+        stop?()
+    }
+
+    func stopOnStreamError(_ handler: @escaping () -> Void) {
+        stopLock.lock()
+        stopHandler = handler
+        let alreadyStopped = streamError != nil
+        stopLock.unlock()
+        if alreadyStopped {
+            handler()
+        }
+    }
+
+    func streamFailure() -> Error? {
+        stopLock.withLock { streamError }
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -226,8 +253,9 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     }
 
     func finish() async throws {
-        if let streamError {
-            throw streamError
+        let error = streamFailure()
+        if let error {
+            throw error
         }
 
         guard didStartWriting else {
@@ -434,15 +462,11 @@ private func stopStream(_ stream: SCStream) async throws {
 }
 
 private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate) async {
-    if let duration {
-        try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
-        return
-    }
-
     await withCheckedContinuation { continuation in
         final class StopState {
             var didResume = false
             var sources: [DispatchSourceSignal] = []
+            var timer: DispatchSourceTimer?
             let lock = NSLock()
         }
 
@@ -455,19 +479,38 @@ private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate
             for source in state.sources {
                 source.cancel()
             }
+            state.timer?.cancel()
             continuation.resume()
+        }
+
+        let timer: DispatchSourceTimer?
+        if let duration {
+            let durationTimer = DispatchSource.makeTimerSource(queue: .main)
+            durationTimer.schedule(deadline: .now() + duration)
+            durationTimer.setEventHandler(handler: resumeOnce)
+            timer = durationTimer
+        } else {
+            timer = nil
         }
 
         signal(SIGINT, SIG_IGN)
         signal(SIGTERM, SIG_IGN)
-        for signalNumber in [SIGINT, SIGTERM] {
+        let sources = [SIGINT, SIGTERM].map { signalNumber in
             let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
             source.setEventHandler(handler: resumeOnce)
-            state.sources.append(source)
+            return source
+        }
+        state.lock.lock()
+        state.sources = sources
+        state.timer = timer
+        state.lock.unlock()
+        for source in sources {
             source.resume()
         }
+        timer?.resume()
+        delegate.stopOnStreamError(resumeOnce)
 
-        if Runtime.config.framed {
+        if duration == nil && Runtime.config.framed {
             DispatchQueue.global(qos: .userInitiated).async {
                 while let line = readLine() {
                     handleRecordControlLine(line, delegate: delegate, stop: resumeOnce)

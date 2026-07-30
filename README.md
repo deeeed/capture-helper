@@ -211,7 +211,7 @@ The wrapper resolves the binary in this order:
 - `list` / `version`: JSON on stdout by default
 - streaming/capture diagnostics: JSON lines on stderr
 - command failures: JSON error lines on stderr with stable `code` values such as `target_required` and `window_not_found`
-- signal handling: `SIGINT`/`SIGTERM` perform cleanup for direct capture; `record --duration` stops automatically
+- signal handling: the npm wrapper forwards `SIGINT`, `SIGTERM`, and `SIGHUP`; a repeated signal forces termination if cleanup stalls; `record --duration` stops automatically
 
 See [docs/protocol.md](docs/protocol.md) for the framed stream and event contract.
 
