@@ -1,6 +1,6 @@
 {
   "name": "@siteed/capture-helper",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Generic window-capture CLI for window discovery, capture, recording, and agent evidence streams. macOS (ScreenCaptureKit) and Linux/X11 (XComposite + ffmpeg).",
   "license": "MIT",
   "private": false,

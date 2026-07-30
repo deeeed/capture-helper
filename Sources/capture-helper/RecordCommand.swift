@@ -106,6 +106,8 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     private var didFinish = false
     private var frameCount = 0
     private var streamError: Error?
+    private var stopHandler: (() -> Void)?
+    private let stopLock = NSLock()
     private let latestFrameLock = NSLock()
     private var latestPixelBuffer: CVPixelBuffer?
 
@@ -153,8 +155,22 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
+        stopLock.lock()
         streamError = error
+        let stop = stopHandler
+        stopLock.unlock()
         logErrorMessage(code: "stream_stopped", message: "record stream stopped: \(error)")
+        stop?()
+    }
+
+    func stopOnStreamError(_ handler: @escaping () -> Void) {
+        stopLock.lock()
+        stopHandler = handler
+        let alreadyStopped = streamError != nil
+        stopLock.unlock()
+        if alreadyStopped {
+            handler()
+        }
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -457,6 +473,7 @@ private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate
             }
             continuation.resume()
         }
+        delegate.stopOnStreamError(resumeOnce)
 
         signal(SIGINT, SIG_IGN)
         signal(SIGTERM, SIG_IGN)
