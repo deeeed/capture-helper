@@ -71,7 +71,14 @@ func runRecord(_ config: Config) async throws {
         logEvent(("type", "record_waiting"), ("message", "Recording; press Ctrl-C to stop"))
     }
     await waitForRecordStop(duration: config.durationSeconds, delegate: delegate)
-    try await stopStream(stream)
+    do {
+        try await stopStream(stream)
+    } catch {
+        if let streamError = delegate.streamFailure() {
+            throw streamError
+        }
+        throw error
+    }
     try await delegate.finish()
 
     let size = (try? fm.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?.intValue ?? 0
@@ -173,6 +180,10 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
         }
     }
 
+    func streamFailure() -> Error? {
+        stopLock.withLock { streamError }
+    }
+
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, !didFinish else { return }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
@@ -242,7 +253,7 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     }
 
     func finish() async throws {
-        let error = stopLock.withLock { streamError }
+        let error = streamFailure()
         if let error {
             throw error
         }
