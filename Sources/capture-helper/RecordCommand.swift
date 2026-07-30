@@ -71,6 +71,9 @@ func runRecord(_ config: Config) async throws {
         logEvent(("type", "record_waiting"), ("message", "Recording; press Ctrl-C to stop"))
     }
     await waitForRecordStop(duration: config.durationSeconds, delegate: delegate)
+    if let streamError = delegate.streamFailure() {
+        throw streamError
+    }
     do {
         try await stopStream(stream)
     } catch {
@@ -451,12 +454,32 @@ func openFile(path: String) -> Bool {
 
 private func stopStream(_ stream: SCStream) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        stream.stopCapture { error in
+        final class StopState: @unchecked Sendable {
+            let lock = NSLock()
+            var completed = false
+        }
+
+        let state = StopState()
+        let complete: @Sendable (Error?) -> Void = { error in
+            state.lock.lock()
+            guard !state.completed else {
+                state.lock.unlock()
+                return
+            }
+            state.completed = true
+            state.lock.unlock()
             if let error {
                 continuation.resume(throwing: error)
             } else {
                 continuation.resume()
             }
+        }
+
+        stream.stopCapture { error in
+            complete(error)
+        }
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 5) {
+            complete(CaptureError.recordFailed("timed out waiting for ScreenCaptureKit to stop the recording stream"))
         }
     }
 }

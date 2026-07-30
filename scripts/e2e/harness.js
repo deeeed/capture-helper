@@ -15,6 +15,7 @@
  *   - CAPTURE_HELPER env: path to an executable (e.g. "/usr/local/bin/capture-helper");
  *     it is spawned directly, not shell-parsed, so no args/quoting.
  *   - otherwise: `node <repo>/bin/capture-helper.js`.
+ *   - E2E_SKIP_STREAM=1 omits the independent framed-stream check.
  *
  * Target selection:
  *   - E2E_TARGET_APP + E2E_TARGET_NAME → --app-name/--window-name (+match)
@@ -197,40 +198,42 @@ async function main() {
     return `${sz} bytes${done.frames != null ? ', ' + done.frames + ' frames' : ''}`;
   });
 
-  await new Promise((res) => {
-    collectFramedStream(target.add, 2500).then(({ buf, stderr, code, error }) => {
-      check('stream --framed yields decodable H.264', () => {
-        assert(!error, `stream process error: ${error && error.message}`);
-        const events = parseEvents(stderr);
-        assert(events.some((e) => e.type === 'added'), `no 'added' event (stderr: ${stderr.trim().split('\n').pop()})`);
-        const failures = events.filter((e) => e.type === 'add_failed' || e.type === 'stream_stopped' || (e.type === 'error'));
-        assert(failures.length === 0, `stream reported errors: ${JSON.stringify(failures[0])}`);
-        assert(code === 0, `stream exited with code ${code} (expected clean 0 after -0/EOF)`);
-        const added = new Set(events.filter((e) => e.type === 'added').map((e) => e.index));
-        const f = parseFramed(buf);
-        assert(!f.truncated, 'framed output has trailing/partial bytes (incomplete packet framing)');
-        assert(f.badFlags === 0, 'framed packets set reserved flag bits (only bit 0 = keyframe is defined)');
-        assert(f.indexes.every((i) => added.has(i)), `framed packet index not in 'added' set: got ${f.indexes} added ${[...added]}`);
-        assert(f.packets > 0, 'no framed packets');
-        assert(f.keyframes > 0, 'no keyframe in stream');
-        // Best-effort: actually decode the extracted Annex B to prove the bytes are real H.264.
-        let decoded = 'DECODE NOT VALIDATED (ffprobe not found — install ffmpeg for full validation)';
-        const probe = which('ffprobe');
-        if (probe) {
-          const idx = f.indexes[0];
-          const h264 = path.join(TMP, 'framed.h264');
-          fs.writeFileSync(h264, f.annexb.get(idx));
-          const r = spawnSync(probe, ['-v', 'error', '-count_frames', '-select_streams', 'v:0',
-            '-show_entries', 'stream=nb_read_frames', '-of', 'default=nokey=1:noprint_wrappers=1', h264], { encoding: 'utf8' });
-          const n = parseInt((r.stdout || '').trim(), 10);
-          assert(Number.isFinite(n) && n > 0, `ffprobe could not decode the framed stream: ${(r.stderr || '').trim() || 'no frames'}`);
-          decoded = `${n} frames decoded`;
-        }
-        return `${f.packets} packets, ${f.keyframes} keyframes, ${decoded}`;
+  if (process.env.E2E_SKIP_STREAM !== '1') {
+    await new Promise((res) => {
+      collectFramedStream(target.add, 2500).then(({ buf, stderr, code, error }) => {
+        check('stream --framed yields decodable H.264', () => {
+          assert(!error, `stream process error: ${error && error.message}`);
+          const events = parseEvents(stderr);
+          assert(events.some((e) => e.type === 'added'), `no 'added' event (stderr: ${stderr.trim().split('\n').pop()})`);
+          const failures = events.filter((e) => e.type === 'add_failed' || e.type === 'stream_stopped' || (e.type === 'error'));
+          assert(failures.length === 0, `stream reported errors: ${JSON.stringify(failures[0])}`);
+          assert(code === 0, `stream exited with code ${code} (expected clean 0 after -0/EOF)`);
+          const added = new Set(events.filter((e) => e.type === 'added').map((e) => e.index));
+          const f = parseFramed(buf);
+          assert(!f.truncated, 'framed output has trailing/partial bytes (incomplete packet framing)');
+          assert(f.badFlags === 0, 'framed packets set reserved flag bits (only bit 0 = keyframe is defined)');
+          assert(f.indexes.every((i) => added.has(i)), `framed packet index not in 'added' set: got ${f.indexes} added ${[...added]}`);
+          assert(f.packets > 0, 'no framed packets');
+          assert(f.keyframes > 0, 'no keyframe in stream');
+          // Best-effort: actually decode the extracted Annex B to prove the bytes are real H.264.
+          let decoded = 'DECODE NOT VALIDATED (ffprobe not found — install ffmpeg for full validation)';
+          const probe = which('ffprobe');
+          if (probe) {
+            const idx = f.indexes[0];
+            const h264 = path.join(TMP, 'framed.h264');
+            fs.writeFileSync(h264, f.annexb.get(idx));
+            const r = spawnSync(probe, ['-v', 'error', '-count_frames', '-select_streams', 'v:0',
+              '-show_entries', 'stream=nb_read_frames', '-of', 'default=nokey=1:noprint_wrappers=1', h264], { encoding: 'utf8' });
+            const n = parseInt((r.stdout || '').trim(), 10);
+            assert(Number.isFinite(n) && n > 0, `ffprobe could not decode the framed stream: ${(r.stderr || '').trim() || 'no frames'}`);
+            decoded = `${n} frames decoded`;
+          }
+          return `${f.packets} packets, ${f.keyframes} keyframes, ${decoded}`;
+        });
+        res();
       });
-      res();
     });
-  });
+  }
 
   finish();
 }

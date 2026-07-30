@@ -1,6 +1,6 @@
 {
   "name": "@siteed/capture-helper",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Generic window-capture CLI for window discovery, capture, recording, and agent evidence streams. macOS (ScreenCaptureKit) and Linux/X11 (XComposite + ffmpeg).",
   "license": "MIT",
   "private": false,
@@ -27,7 +27,7 @@
     "test": "swift test",
     "test:js": "node --test scripts/test/*.test.js",
     "pack:dry-run": "npm pack --dry-run",
-    "record:smoke": "node bin/capture-helper.js record --duration 1 --output /tmp/capture-helper-smoke.mp4 --help",
+    "record:smoke": "E2E_SKIP_STREAM=1 bash scripts/e2e/validate.sh",
     "postinstall": "node scripts/postinstall.js",
     "resolve:smoke": "node bin/capture-helper.js resolve --window-id 1 || true",
     "snapshot:smoke": "node bin/capture-helper.js snapshot --window-id 1 --output /tmp/capture-helper-smoke.png || true"

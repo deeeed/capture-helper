@@ -36,6 +36,7 @@ swift build -c release
 swift test
 npm run build:native
 npm run doctor
+npm run record:smoke
 npm pack --dry-run
 ```
 

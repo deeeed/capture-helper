@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-07-31
+
+### Fixed
+
+- Interrupted ScreenCaptureKit recordings now exit promptly instead of waiting
+  forever for an already-stopped stream, preventing stale capture processes from
+  breaking later recordings.
+- The recording smoke command now runs the real TextEdit capture lifecycle
+  instead of only printing command help.
+
 ## [0.2.4] - 2026-07-30
 
 ### Fixed
@@ -109,7 +119,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Earlier 0.1.x releases: native MP4 recording, human-readable CLI output, window
   discovery, capture, snapshot, and streaming on macOS (ScreenCaptureKit).
 
-[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/deeeed/capture-helper/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/deeeed/capture-helper/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/deeeed/capture-helper/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/deeeed/capture-helper/compare/v0.2.1...v0.2.2

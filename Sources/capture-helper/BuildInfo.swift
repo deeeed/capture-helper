@@ -3,7 +3,7 @@ import Foundation
 enum BuildInfo {
     static let name = "@siteed/capture-helper"
     static let binaryName = "capture-helper"
-    static let version = "0.2.4"
+    static let version = "0.2.5"
     static let capabilities = ["record_session_snapshot"]
 
     static var architecture: String {
