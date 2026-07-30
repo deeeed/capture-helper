@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { spawn, spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 const os = require('node:os');

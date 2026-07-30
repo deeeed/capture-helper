@@ -472,16 +472,14 @@ private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate
             continuation.resume()
         }
 
+        let timer: DispatchSourceTimer?
         if let duration {
-            let timer = DispatchSource.makeTimerSource(queue: .main)
-            timer.schedule(deadline: .now() + duration)
-            timer.setEventHandler(handler: resumeOnce)
-            state.lock.lock()
-            state.timer = timer
-            state.lock.unlock()
-            timer.resume()
-            delegate.stopOnStreamError(resumeOnce)
-            return
+            let durationTimer = DispatchSource.makeTimerSource(queue: .main)
+            durationTimer.schedule(deadline: .now() + duration)
+            durationTimer.setEventHandler(handler: resumeOnce)
+            timer = durationTimer
+        } else {
+            timer = nil
         }
 
         signal(SIGINT, SIG_IGN)
@@ -493,13 +491,15 @@ private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate
         }
         state.lock.lock()
         state.sources = sources
+        state.timer = timer
         state.lock.unlock()
         for source in sources {
             source.resume()
         }
+        timer?.resume()
         delegate.stopOnStreamError(resumeOnce)
 
-        if Runtime.config.framed {
+        if duration == nil && Runtime.config.framed {
             DispatchQueue.global(qos: .userInitiated).async {
                 while let line = readLine() {
                     handleRecordControlLine(line, delegate: delegate, stop: resumeOnce)
