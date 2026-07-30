@@ -242,8 +242,9 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     }
 
     func finish() async throws {
-        if let streamError {
-            throw streamError
+        let error = stopLock.withLock { streamError }
+        if let error {
+            throw error
         }
 
         guard didStartWriting else {
