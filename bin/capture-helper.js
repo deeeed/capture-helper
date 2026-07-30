@@ -48,12 +48,12 @@ function dispatch(executable, executableArgs) {
 
   const forward = (signal) => {
     forwardedSignal = signal;
-    if (!child.killed) child.kill(signal);
+    if (child.exitCode === null && child.signalCode === null) child.kill(signal);
   };
   const onSigint = () => forward('SIGINT');
   const onSigterm = () => forward('SIGTERM');
-  process.once('SIGINT', onSigint);
-  process.once('SIGTERM', onSigterm);
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
 
   child.once('error', (error) => {
     removeSignalHandlers();
