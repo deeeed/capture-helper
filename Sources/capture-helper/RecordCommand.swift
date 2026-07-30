@@ -450,15 +450,11 @@ private func stopStream(_ stream: SCStream) async throws {
 }
 
 private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate) async {
-    if let duration {
-        try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
-        return
-    }
-
     await withCheckedContinuation { continuation in
         final class StopState {
             var didResume = false
             var sources: [DispatchSourceSignal] = []
+            var timer: DispatchSourceTimer?
             let lock = NSLock()
         }
 
@@ -471,18 +467,36 @@ private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate
             for source in state.sources {
                 source.cancel()
             }
+            state.timer?.cancel()
             continuation.resume()
         }
-        delegate.stopOnStreamError(resumeOnce)
+
+        if let duration {
+            let timer = DispatchSource.makeTimerSource(queue: .main)
+            timer.schedule(deadline: .now() + duration)
+            timer.setEventHandler(handler: resumeOnce)
+            state.lock.lock()
+            state.timer = timer
+            state.lock.unlock()
+            timer.resume()
+            delegate.stopOnStreamError(resumeOnce)
+            return
+        }
 
         signal(SIGINT, SIG_IGN)
         signal(SIGTERM, SIG_IGN)
-        for signalNumber in [SIGINT, SIGTERM] {
+        let sources = [SIGINT, SIGTERM].map { signalNumber in
             let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
             source.setEventHandler(handler: resumeOnce)
-            state.sources.append(source)
+            return source
+        }
+        state.lock.lock()
+        state.sources = sources
+        state.lock.unlock()
+        for source in sources {
             source.resume()
         }
+        delegate.stopOnStreamError(resumeOnce)
 
         if Runtime.config.framed {
             DispatchQueue.global(qos: .userInitiated).async {

@@ -55,8 +55,10 @@ function dispatch(executable, executableArgs) {
   };
   const onSigint = () => forward('SIGINT');
   const onSigterm = () => forward('SIGTERM');
+  const onSighup = () => forward('SIGHUP');
   process.on('SIGINT', onSigint);
   process.on('SIGTERM', onSigterm);
+  process.on('SIGHUP', onSighup);
 
   child.once('error', (error) => {
     removeSignalHandlers();
@@ -75,6 +77,7 @@ function dispatch(executable, executableArgs) {
   function removeSignalHandlers() {
     process.removeListener('SIGINT', onSigint);
     process.removeListener('SIGTERM', onSigterm);
+    process.removeListener('SIGHUP', onSighup);
   }
 }
 
