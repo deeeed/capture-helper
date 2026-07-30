@@ -67,7 +67,7 @@ function dispatch(executable, executableArgs) {
   });
   child.once('exit', (code, signal) => {
     removeSignalHandlers();
-    if (forwardedSignal || signal) {
+    if (signal) {
       process.exitCode = 128 + (os.constants.signals[forwardedSignal || signal] ?? 1);
       return;
     }

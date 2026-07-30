@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The npm wrapper now forwards termination signals to the native capture process,
-  preventing timed-out doctor and recording commands from leaving orphan processes.
+  preventing timed-out doctor and recording commands from leaving orphan processes
+  while preserving the native command's final exit result.
 - Framed recording now exits when ScreenCaptureKit stops the stream, instead of
   waiting indefinitely for another stdin command.
 
