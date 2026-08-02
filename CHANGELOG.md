@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- MP4 evidence recording now defaults to a 1440-pixel maximum dimension at up
+  to 30 fps, while live capture and streaming retain their lower-bandwidth
+  720-pixel and 15 fps defaults. Both settings remain configurable.
+
 ## [0.2.5] - 2026-07-31
 
 ### Fixed

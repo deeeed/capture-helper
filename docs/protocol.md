@@ -144,6 +144,10 @@ capture-helper record --window-id 12345 --duration 5 --output evidence.mp4
 
 On macOS, `record` resolves the target window, captures frames with ScreenCaptureKit, and writes an MP4 directly with no `ffmpeg` dependency. On Linux, `record` requires `ffmpeg`.
 
+Recording defaults to `--max-size 1440 --max-fps 30`; explicit values override
+either default. `capture` and `stream` keep their lower-bandwidth defaults of
+`--max-size 720 --max-fps 15`.
+
 `record --framed` keeps the MP4 writer running and accepts stdin control commands. This lets automation capture still-image proof from the same ScreenCaptureKit stream instead of starting a second capture against the same window.
 
 ```bash

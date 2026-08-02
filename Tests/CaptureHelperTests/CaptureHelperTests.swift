@@ -118,6 +118,8 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("capture-helper help"), result.stderr)
         XCTAssertTrue(result.stderr.contains("--on-screen"), result.stderr)
         XCTAssertTrue(result.stderr.contains("--all"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("record: 30; stream/capture: 15"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("record: 1440; stream/capture: 720"), result.stderr)
     }
 
     func testVersionSupportsHumanOutput() throws {

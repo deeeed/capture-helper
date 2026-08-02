@@ -139,7 +139,8 @@ function parseArgs(argv) {
       case 'stream': cfg.command = 'capture'; cfg.framed = true; sawCommand = true; i++; break;
       case 'list': case 'windows': cfg.command = 'list'; sawCommand = true; i++; break;
       case 'doctor': cfg.command = 'doctor'; cfg.json = false; sawCommand = true; i++; break;
-      case 'record': cfg.command = 'record'; sawCommand = true; i++; break;
+      case 'record':
+        cfg.command = 'record'; cfg.maxFps = 30; cfg.maxSize = 1440; sawCommand = true; i++; break;
       case 'resolve': cfg.command = 'resolve'; sawCommand = true; i++; break;
       case 'snapshot': cfg.command = 'snapshot'; sawCommand = true; i++; break;
       case 'permissions':
@@ -223,8 +224,8 @@ Target options:
   --pid <int>             Capture largest suitable window owned by PID.
 
 Capture options:
-  --max-fps <int>         Max frame rate (default: 15)
-  --max-size <int>        Max dimension in pixels (default: 720)
+  --max-fps <int>         Max frame rate (record: 30; stream/capture: 15)
+  --max-size <int>        Max dimension (record: 1440; stream/capture: 720)
   --framed                Framed output with stdin commands
   --encoder <name>        ffmpeg encoder (default: ${adapter.defaultEncoder}; e.g. h264_nvenc)
 
