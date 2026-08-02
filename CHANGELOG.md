@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.6] - 2026-08-02
-
 ### Changed
 
 - MP4 evidence recording now defaults to a 1440-pixel maximum dimension at up
@@ -127,8 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Earlier 0.1.x releases: native MP4 recording, human-readable CLI output, window
   discovery, capture, snapshot, and streaming on macOS (ScreenCaptureKit).
 
-[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.6...HEAD
-[0.2.6]: https://github.com/deeeed/capture-helper/compare/v0.2.5...v0.2.6
+[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.5...HEAD
 [0.2.5]: https://github.com/deeeed/capture-helper/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/deeeed/capture-helper/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/deeeed/capture-helper/compare/v0.2.2...v0.2.3
