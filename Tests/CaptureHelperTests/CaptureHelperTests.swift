@@ -14,7 +14,7 @@ final class CaptureHelperTests: XCTestCase {
         let object = try parseJSONObject(result.stdout)
         XCTAssertEqual(object["name"] as? String, "@siteed/capture-helper")
         XCTAssertEqual(object["binary"] as? String, "capture-helper")
-        XCTAssertEqual(object["version"] as? String, "0.2.5")
+        XCTAssertEqual(object["version"] as? String, "0.2.6")
         XCTAssertNotNil(object["architecture"])
         XCTAssertNotNil(object["osVersion"])
     }
@@ -118,20 +118,22 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("capture-helper help"), result.stderr)
         XCTAssertTrue(result.stderr.contains("--on-screen"), result.stderr)
         XCTAssertTrue(result.stderr.contains("--all"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("record: 30; stream/capture: 15"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("record: 1440; stream/capture: 720"), result.stderr)
     }
 
     func testVersionSupportsHumanOutput() throws {
         let result = try runHelper(["version", "--human"])
 
         XCTAssertEqual(result.status, 0, result.stderr)
-        XCTAssertEqual(result.stdout, "capture-helper 0.2.5\n")
+        XCTAssertEqual(result.stdout, "capture-helper 0.2.6\n")
     }
 
     func testVersionSupportsShortHumanOutput() throws {
         let result = try runHelper(["version", "-h"])
 
         XCTAssertEqual(result.status, 0, result.stderr)
-        XCTAssertEqual(result.stdout, "capture-helper 0.2.5\n")
+        XCTAssertEqual(result.stdout, "capture-helper 0.2.6\n")
     }
 
     func testHelpCommandShowsUsage() throws {

@@ -33,6 +33,9 @@ struct Config {
     var listAll = false
 }
 
+private let defaultRecordMaxFps: Int32 = 30
+private let defaultRecordMaxSize = 1440
+
 enum Runtime {
     static var config = Config()
 }
@@ -60,7 +63,10 @@ func parseArgs(_ args: [String] = CommandLine.arguments) -> Config {
             cfg.json = false
             sawCommand = true; i += 1
         case "record":
-            cfg.command = .record; sawCommand = true; i += 1
+            cfg.command = .record
+            cfg.maxFps = defaultRecordMaxFps
+            cfg.maxSize = defaultRecordMaxSize
+            sawCommand = true; i += 1
         case "resolve":
             cfg.command = .resolve; sawCommand = true; i += 1
         case "snapshot":
@@ -204,8 +210,8 @@ func exitUsage() -> Never {
       --pid <int>             Capture largest suitable window owned by PID.
 
     Capture options:
-      --max-fps <int>         Max frame rate (default: 15)
-      --max-size <int>        Max dimension in pixels (default: 720)
+      --max-fps <int>         Max frame rate (record: 30; stream/capture: 15)
+      --max-size <int>        Max dimension (record: 1440; stream/capture: 720)
       --framed                Framed output with stdin commands
 
     Record/snapshot options:
