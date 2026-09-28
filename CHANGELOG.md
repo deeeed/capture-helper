@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Native recording timing sidecars and concurrent snapshot timestamps, with finalized frame indexes, video digests and explicit screenshot-to-video correspondence.
+
+### Fixed
+
+- Avoid dropping the final repaint through a second rate limiter after ScreenCaptureKit has already limited capture frequency.
+
 ## [0.2.6] - 2026-08-02
 
 ### Changed

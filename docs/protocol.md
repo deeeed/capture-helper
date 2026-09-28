@@ -159,6 +159,42 @@ stop
 
 Record-session snapshots are PNG files written from the active recording frame. On macOS they are encoded natively in Swift and do not require `ffmpeg`. Consumers should check `version --json` for the `record_session_snapshot` capability before using this protocol.
 
+### Native recording timing
+
+The optional macOS capability `record_session_timing_v1` adds timing to the same
+recording session. It is not currently advertised by the Linux backend. Existing
+event fields and stdin commands remain compatible.
+
+`record_start`, session `snapshot`, and `record_complete` events carry a unique
+`recording_id`. A successful completion includes `timing_path`, naming the sidecar
+`<output>.timing.json`. Capture-helper reads finalized MP4 sample times through
+AVFoundation; producing this file requires neither ffmpeg nor ffprobe.
+`record_ready` is emitted after the first frame is accepted by the writer, with
+`recording_id`, `source_time_ms`, and `media_time_ms`. Callers can wait for it before
+starting proof actions instead of waiting an arbitrary startup delay.
+
+The sidecar contains `version: 1`, `recording_id`, `video_file` basename,
+`video_digest` as `sha256:<hex>`, increasing `frames_ms`, `duration_ms`, `clock`, and
+`snapshots`. Frame times are presentation times on the final video's seek clock.
+The clock has `source: "coremedia-host-clock"`, `earliest_zero_unix_ms` and
+`latest_zero_unix_ms`. These bound media zero using host-clock/wall-clock samples
+at recording start and completion. This is clock calibration, not a bound on
+visual latency or proof of an action result.
+
+A session snapshot event adds `source_time_ms`, `media_time_ms`, and
+`writer_accepted`. `writer_frame_index` is present only when the writer accepted
+that source frame. It is provisional until finalization. The sidecar snapshot
+record adds `encoded_frame_index` only if that source frame is found in the
+finalized MP4. A screenshot can capture a source frame the encoder did not accept;
+absence of this index must not be treated as video proof. Screenshots are lossless
+PNGs while MP4 encoding is lossy, so corresponding pixels need not be identical.
+
+Consumers verify `recording_id` and `video_digest`, keep the sidecar with the MP4,
+and bind their action/proof IDs outside capture-helper. Snapshot paths may need
+normalization when publishing an artifact package. A failed recording never
+publishes a new completion event; any previous sidecar at the output path is
+removed when recording starts. A held last frame is not a new observation.
+
 ### `stream`
 
 `stream` is capture mode with framed multi-window behavior enabled.

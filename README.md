@@ -160,6 +160,11 @@ capture-helper record --window-id 12345 --duration 5 --output evidence.mp4 --ope
   capture-helper record --framed --window-id 12345 --output evidence.mp4
 ```
 
+On macOS, builds advertising `record_session_timing_v1` also write
+`evidence.mp4.timing.json`. It identifies finalized video frames, the recording
+clock, and which concurrent screenshots correspond to encoded frames. See
+[recording timing](docs/protocol.md#native-recording-timing) for the event contract.
+
 MP4 recording defaults to a 1440-pixel maximum dimension at up to 30 fps. Live
 capture and streaming retain their lower-bandwidth 720-pixel and 15 fps defaults.
 Override either mode with `--max-size` and `--max-fps`.
