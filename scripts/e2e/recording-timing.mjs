@@ -45,22 +45,29 @@ async function wait(check, label) {
   throw new Error(`Timed out: ${label}`);
 }
 let child;
+const events = [];
 try {
   await call('Page.bringToFront');
   await wait(() => evaluate(`document.title === ${JSON.stringify(title)}`), 'test document loaded');
   const windows = JSON.parse(execFileSync(helper, ['list', '--json'], { encoding: 'utf8' })).windows;
   const window = windows.find(window => window.title.includes(title) && window.width > 300);
   assert.ok(window, 'Owned test document must have an exact capture window');
+  execFileSync('osascript', ['-e', `tell application "System Events" to set frontmost of (first process whose unix id is ${window.pid}) to true`]);
+  await call('Page.bringToFront');
   const video = path.join(root, 'recording.mp4');
   child = spawn(helper, ['record', '--framed', '--window-id', String(window.id), '--max-fps', '30', '--output', video], { stdio: ['pipe', 'ignore', 'pipe'] });
   const exited = once(child, 'exit');
-  const events = []; let buffered = '';
+  let buffered = '';
   child.stderr.on('data', chunk => {
     buffered += chunk.toString();
     const lines = buffered.split('\n'); buffered = lines.pop();
     for (const line of lines) if (line.trim()) events.push(JSON.parse(line));
   });
-  await wait(() => events.some(event => event.type === 'info' && event.msg === 'record frames=1'), 'first recorded frame');
+  await wait(() => {
+    const failure = events.find(event => event.type === 'error');
+    if (failure) throw new Error(JSON.stringify(failure));
+    return events.some(event => event.type === 'record_ready');
+  }, 'first recorded frame');
   const actions = [];
   for (const [color, channel] of [['green', 1], ['blue', 2], ['red', 0]]) {
     const point = await evaluate(`(()=>{const r=document.querySelector('#${color}').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
@@ -104,6 +111,7 @@ try {
   await writeFile(path.join(root, 'proof.json'), JSON.stringify({ ...result, actions, events }, null, 2));
   console.log(JSON.stringify(result));
 } finally {
+  await writeFile(path.join(root, 'events.json'), JSON.stringify(events, null, 2));
   if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGINT');
   socket.close(); await fetch(`http://127.0.0.1:${port}/json/close/${target.id}`); server.close();
 }
