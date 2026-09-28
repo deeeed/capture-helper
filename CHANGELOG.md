@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-28
+
 ### Added
 
 - Native recording timing sidecars and concurrent snapshot timestamps, with finalized frame indexes, video digests and explicit screenshot-to-video correspondence.
@@ -135,7 +137,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Earlier 0.1.x releases: native MP4 recording, human-readable CLI output, window
   discovery, capture, snapshot, and streaming on macOS (ScreenCaptureKit).
 
-[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/deeeed/capture-helper/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/deeeed/capture-helper/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/deeeed/capture-helper/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/deeeed/capture-helper/compare/v0.2.3...v0.2.4
