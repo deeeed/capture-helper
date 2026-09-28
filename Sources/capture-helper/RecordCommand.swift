@@ -21,6 +21,8 @@ func runRecord(_ config: Config) async throws {
     if fm.fileExists(atPath: outputPath) {
         try fm.removeItem(at: outputURL)
     }
+    let priorTiming = outputPath + ".timing.json"
+    if fm.fileExists(atPath: priorTiming) { try fm.removeItem(atPath: priorTiming) }
 
     let resolved = try await resolveTarget(config)
     let window = resolved.window
@@ -60,6 +62,7 @@ func runRecord(_ config: Config) async throws {
         ("type", "record_start"),
         ("engine", "native"),
         ("output", outputPath),
+        ("recording_id", delegate.recordingId),
         ("selector", resolved.selector),
         ("windowId", Int(window.windowID)),
         ("width", outW),
@@ -82,7 +85,10 @@ func runRecord(_ config: Config) async throws {
         }
         throw error
     }
+    // stopCapture ends delivery; drain queued writer callbacks before finalizing.
+    queue.sync {}
     try await delegate.finish()
+    let timingPath = try await delegate.writeTiming()
 
     let size = (try? fm.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?.intValue ?? 0
     guard size > 0 else {
@@ -94,6 +100,8 @@ func runRecord(_ config: Config) async throws {
         ("engine", "native"),
         ("output", outputPath),
         ("frames", delegate.writtenFrames),
+        ("recording_id", delegate.recordingId),
+        ("timing_path", timingPath),
         ("bytes", size)
     )
 
@@ -103,9 +111,14 @@ func runRecord(_ config: Config) async throws {
 }
 
 private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+    let recordingId = UUID().uuidString
+    private let startClock = RecordingClockSample.measure()
+    private var latestSourcePts: CMTime?
+    private var latestMediaMs: Double?
+    private var latestWriterIndex: Int?
+    private var snapshotRecords: [[String: Any]] = []
     private let outputURL: URL
     private let maxFps: Int32
-    private let minFrameInterval: CMTime
     private let writer: AVAssetWriter
     private let input: AVAssetWriterInput
     private let adaptor: AVAssetWriterInputPixelBufferAdaptor
@@ -126,7 +139,6 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     init(outputURL: URL, width: Int, height: Int, maxFps: Int32) {
         self.outputURL = outputURL
         self.maxFps = maxFps
-        self.minFrameInterval = CMTime(value: 1, timescale: maxFps)
 
         do {
             self.writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
@@ -146,6 +158,7 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
         ]
         self.input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         self.input.expectsMediaDataInRealTime = true
+        self.input.mediaTimeScale = 1_000_000
 
         self.adaptor = AVAssetWriterInputPixelBufferAdaptor(
             assetWriterInput: input,
@@ -189,23 +202,35 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, !didFinish else { return }
+        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
+              let status = attachments.first?[.status] as? Int,
+              status == SCFrameStatus.complete.rawValue else { return }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        if let copy = copyPixelBuffer(pixelBuffer) {
-            latestFrameLock.lock()
-            latestPixelBuffer = copy
-            latestFrameLock.unlock()
-        }
-
         let sourcePts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        guard sourcePts.isNumeric else { return }
+        latestFrameLock.lock()
+        defer { latestFrameLock.unlock() }
         if firstPts == nil {
             firstPts = sourcePts
         }
         guard let firstPts else { return }
 
         let pts = CMTimeSubtract(sourcePts, firstPts)
+        latestPixelBuffer = nil
+        latestSourcePts = nil
+        latestMediaMs = nil
+        latestWriterIndex = nil
+        if let copy = copyPixelBuffer(pixelBuffer) {
+            latestPixelBuffer = copy
+            latestSourcePts = sourcePts
+            latestMediaMs = CMTimeGetSeconds(pts) * 1000
+            latestWriterIndex = nil
+        }
         if lastWrittenPts.isValid {
             let delta = CMTimeSubtract(pts, lastWrittenPts)
-            if delta.isNumeric && CMTimeCompare(delta, minFrameInterval) < 0 {
+            // ScreenCaptureKit already applies minimumFrameInterval. A second
+            // throttle can drop the final repaint of an otherwise idle window.
+            if !delta.isNumeric || CMTimeCompare(delta, .zero) <= 0 {
                 return
             }
         }
@@ -223,7 +248,13 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
         guard input.isReadyForMoreMediaData else { return }
         if adaptor.append(pixelBuffer, withPresentationTime: pts) {
             lastWrittenPts = pts
+            if latestPixelBuffer != nil { latestWriterIndex = frameCount }
             frameCount += 1
+            if frameCount == 1 {
+                logEvent(("type", "record_ready"), ("recording_id", recordingId),
+                         ("media_time_ms", CMTimeGetSeconds(pts) * 1000),
+                         ("source_time_ms", CMTimeGetSeconds(sourcePts) * 1000))
+            }
             if frameCount == 1 || frameCount % 300 == 0 {
                 log("info", "record frames=\(frameCount)")
             }
@@ -232,11 +263,14 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
         }
     }
 
-    func writeSnapshot(to outputPath: String) throws -> Int {
+    func writeSnapshot(to outputPath: String) throws -> [String: Any] {
         latestFrameLock.lock()
         let pixelBuffer = latestPixelBuffer
+        let mediaMs = latestMediaMs
+        let sourcePts = latestSourcePts
+        let writerIndex = latestWriterIndex
         latestFrameLock.unlock()
-        guard let pixelBuffer else {
+        guard let pixelBuffer, let mediaMs, let sourcePts else {
             throw CaptureError.snapshotFailed("recording session has not captured a frame yet")
         }
 
@@ -252,7 +286,42 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
 
         let png = try pngDataFromBgraPixelBuffer(pixelBuffer)
         try png.write(to: outputURL, options: .atomic)
-        return png.count
+        var event: [String: Any] = [
+            "type": "snapshot", "engine": "native", "mode": "record_session",
+            "output": outputPath, "bytes": png.count, "recording_id": recordingId,
+            "source_time_ms": CMTimeGetSeconds(sourcePts) * 1000,
+            "media_time_ms": mediaMs, "writer_accepted": writerIndex != nil
+        ]
+        if let writerIndex { event["writer_frame_index"] = writerIndex }
+        latestFrameLock.withLock { snapshotRecords.append(event) }
+        return event
+    }
+
+    func writeTiming() async throws -> String {
+        let result = try await finalizedRecordingTiming(output: outputURL)
+        guard let firstPts else { throw CaptureError.recordFailed("recording has no source clock anchor") }
+        let endClock = RecordingClockSample.measure()
+        let firstMs = CMTimeGetSeconds(firstPts) * 1000
+        let snapshots = latestFrameLock.withLock { snapshotRecords }.map { snapshot -> [String: Any] in
+            var row = snapshot
+            if let time = row["media_time_ms"] as? Double,
+               row["writer_accepted"] as? Bool == true,
+               let index = result.frames.firstIndex(where: { abs($0 - time) < 0.01 }) {
+                row["encoded_frame_index"] = index
+            }
+            return row
+        }
+        let document: [String: Any] = [
+            "version": 1, "recording_id": recordingId, "video_file": outputURL.lastPathComponent,
+            "video_digest": result.digest, "frames_ms": result.frames, "duration_ms": result.duration,
+            "clock": ["source": "coremedia-host-clock",
+                      "earliest_zero_unix_ms": firstMs + min(startClock.earliestOffsetMs, endClock.earliestOffsetMs),
+                      "latest_zero_unix_ms": firstMs + max(startClock.latestOffsetMs, endClock.latestOffsetMs)],
+            "snapshots": snapshots
+        ]
+        let timingURL = URL(fileURLWithPath: outputURL.path + ".timing.json")
+        try JSONSerialization.data(withJSONObject: document, options: [.sortedKeys]).write(to: timingURL, options: .atomic)
+        return timingURL.path
     }
 
     func finish() async throws {
@@ -267,6 +336,9 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
         }
         guard !didFinish else { return }
         didFinish = true
+        if let firstPts {
+            writer.endSession(atSourceTime: CMTimeSubtract(CMClockGetTime(CMClockGetHostTimeClock()), firstPts))
+        }
         input.markAsFinished()
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -558,14 +630,7 @@ private func handleRecordControlLine(_ line: String, delegate: NativeRecordDeleg
             return
         }
         do {
-            let bytes = try delegate.writeSnapshot(to: outputPath)
-            logEvent(
-                ("type", "snapshot"),
-                ("engine", "native"),
-                ("mode", "record_session"),
-                ("output", outputPath),
-                ("bytes", bytes)
-            )
+            emitJSONLine(try delegate.writeSnapshot(to: outputPath), toStderr: true)
         } catch {
             logError(error, context: ["output": outputPath])
         }

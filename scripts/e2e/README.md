@@ -31,3 +31,17 @@ The harness (`harness.js`) runs `version`, `doctor`, `list`, `resolve`, `snapsho
 `record`, and `stream --framed`, printing PASS/FAIL per check and exiting non-zero on any
 failure. Override the target window with `E2E_TARGET_APP` + `E2E_TARGET_NAME`, or
 `E2E_TARGET_NAME` alone; otherwise it auto-picks the largest capturable window.
+
+## Native recording timing
+
+With Node 22+ and a dedicated Chromium test profile exposing localhost CDP, run:
+
+```bash
+CAPTURE_TIMING_CDP_PORT=<test-browser-port> node scripts/e2e/recording-timing.mjs
+```
+
+The check opens its own test tab, resolves its uniquely titled window, records
+real button interactions and concurrent session screenshots, then independently
+compares MP4 timestamps and pixels using ffprobe/ffmpeg. The helper itself does
+not require those tools for native timing. Output files remain in the printed
+temporary directory. Do not attach this test to a personal browser profile.

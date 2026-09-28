@@ -17,6 +17,7 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertEqual(object["version"] as? String, "0.2.6")
         XCTAssertNotNil(object["architecture"])
         XCTAssertNotNil(object["osVersion"])
+        XCTAssertTrue((object["capabilities"] as? [String])?.contains("record_session_timing_v1") == true)
     }
 
     func testDoctorResolvesExecutableWhenInvokedFromPath() throws {
