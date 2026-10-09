@@ -47,6 +47,21 @@ func logErrorMessage(code: String, message: String, context: [String: Any] = [:]
     emitJSONLine(object, toStderr: true)
 }
 
+/// Exit status when ScreenCaptureKit stops a stream mid-capture. Anything already
+/// captured is kept (`record` finalizes the MP4), so callers can treat it as partial evidence.
+let streamInterruptedExitCode: Int32 = 3
+
+func logStreamInterrupted(frames: Int, mediaTimeMs: Double, cause error: Error, context: [String: Any] = [:]) {
+    let ns = error as NSError
+    var object = context
+    object["frames"] = frames
+    object["media_time_ms"] = mediaTimeMs
+    object["cause"] = "\(ns.domain) \(ns.code): \(ns.localizedDescription)"
+    logErrorMessage(code: "stream_interrupted",
+                    message: "capture stream interrupted after \(frames) frames; frames captured so far were kept",
+                    context: object)
+}
+
 func isScreenRecordingDeniedError(_ error: Error) -> Bool {
     let text = "\(error)".lowercased()
     return text.contains("screencapturekit.scstreamerrordomain code=-3801")

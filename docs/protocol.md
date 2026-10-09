@@ -195,6 +195,31 @@ normalization when publishing an artifact package. A failed recording never
 publishes a new completion event; any previous sidecar at the output path is
 removed when recording starts. A held last frame is not a new observation.
 
+### Stream interruption
+
+ScreenCaptureKit can stop a running stream on its own, for example when the
+captured app's connection drops (`SCStreamErrorDomain -3805`) or the window goes
+away (`-3815`). If `record` has already written frames, it finalizes the MP4 and
+its timing sidecar, then emits one terminal event instead of `record_complete`
+and exits with status **3**:
+
+```json
+{"type":"error","code":"stream_interrupted","frames":2400,"media_time_ms":79966.7,"cause":"com.apple.ScreenCaptureKit.SCStreamErrorDomain -3805: Failed during stream due to application connection being interrupted","output":"evidence.mp4","timing_path":"evidence.mp4.timing.json","bytes":2854120,"recording_id":"…","message":"…"}
+```
+
+`frames` and `media_time_ms` describe the last frame the writer accepted. The MP4
+is a valid partial recording: keep it as evidence and report the capture as
+interrupted rather than discarding it. A `stream_stopped` diagnostic line still
+precedes the event. If the stream stops before any frame was written there is
+nothing to keep: the command fails with exit status 1 as before.
+
+`capture`/`stream` flush frames already handed to the encoder to stdout, then emit
+the same `stream_interrupted` event with the slot `index` used by `added`/`removed`
+(no `output`; `frames` counts frames submitted to the encoder), then `removed`. The
+order on stderr is `stream_stopped`, `stream_interrupted`, `removed`. A non-framed
+`capture` with no window left exits with status 3 (it used to keep running with
+nothing to stream); a framed `stream` keeps running so its controller can add windows.
+
 ### `stream`
 
 `stream` is capture mode with framed multi-window behavior enabled.
@@ -318,6 +343,7 @@ Current stable codes include:
 | `snapshot_failed` | Snapshot command resolved a window but image capture failed. |
 | `setup_failed` | Capture setup failed before streaming could start. |
 | `stream_stopped` | A running ScreenCaptureKit stream stopped with an error. |
+| `stream_interrupted` | The stream stopped mid-capture; frames captured so far were kept. `record` and non-framed `capture` exit with status 3; framed `stream` keeps running. See [Stream interruption](#stream-interruption). |
 | `invalid_index` | Framed stdin command used an invalid slot index. |
 | `window_slot_not_found` | Framed stdin command referenced a missing slot. |
 | `unknown_command` | Framed stdin command was not recognized. |
