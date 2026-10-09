@@ -24,28 +24,15 @@ func runRecord(_ config: Config) async throws {
     let priorTiming = outputPath + ".timing.json"
     if fm.fileExists(atPath: priorTiming) { try fm.removeItem(atPath: priorTiming) }
 
-    let queue = DispatchQueue(label: "record-writer")
-    let delegate: NativeRecordDelegate
-    let stream: SCStream?
+    let source: RecordSource
+    var start: [String: Any] = ["type": "record_start", "engine": "native", "output": outputPath]
+    let outW: Int
+    let outH: Int
     if let simulatedFrames = simulatedInterruptFrameCount() {
-        delegate = NativeRecordDelegate(
-            outputURL: outputURL,
-            width: simulatedFrameWidth,
-            height: simulatedFrameHeight,
-            maxFps: config.maxFps
-        )
-        stream = nil
-        logEvent(
-            ("type", "record_start"),
-            ("engine", "native"),
-            ("output", outputPath),
-            ("recording_id", delegate.recordingId),
-            ("selector", "simulated"),
-            ("width", simulatedFrameWidth),
-            ("height", simulatedFrameHeight)
-        )
-        runSimulatedInterruptedStream(frames: simulatedFrames, fps: config.maxFps, queue: queue,
-                                      onFrame: delegate.appendFrame, onStop: delegate.streamDidStop)
+        source = .simulated(frames: simulatedFrames)
+        start["selector"] = "simulated"
+        outW = simulatedFrameWidth
+        outH = simulatedFrameHeight
     } else {
         let resolved = try await resolveTarget(config)
         let window = resolved.window
@@ -59,10 +46,9 @@ func runRecord(_ config: Config) async throws {
         let srcW = Int(window.frame.width)
         let srcH = Int(window.frame.height)
         let scale = min(Double(config.maxSize) / Double(max(srcW, srcH)), 1.0)
-        let outW = max(2, Int(Double(srcW) * scale) & ~1)
-        let outH = max(2, Int(Double(srcH) * scale) & ~1)
+        outW = max(2, Int(Double(srcW) * scale) & ~1)
+        outH = max(2, Int(Double(srcH) * scale) & ~1)
 
-        let filter = SCContentFilter(desktopIndependentWindow: window)
         let streamConfig = SCStreamConfiguration()
         streamConfig.minimumFrameInterval = CMTime(value: 1, timescale: config.maxFps)
         streamConfig.width = outW
@@ -70,62 +56,56 @@ func runRecord(_ config: Config) async throws {
         streamConfig.pixelFormat = kCVPixelFormatType_32BGRA
         streamConfig.showsCursor = false
         streamConfig.queueDepth = 5
+        source = .window(SCContentFilter(desktopIndependentWindow: window), streamConfig)
+        start["selector"] = resolved.selector
+        start["windowId"] = Int(window.windowID)
+    }
 
-        delegate = NativeRecordDelegate(
-            outputURL: outputURL,
-            width: outW,
-            height: outH,
-            maxFps: config.maxFps
-        )
-        let scStream = SCStream(filter: filter, configuration: streamConfig, delegate: delegate)
-        try scStream.addStreamOutput(delegate, type: .screen, sampleHandlerQueue: queue)
-        stream = scStream
+    let delegate = NativeRecordDelegate(
+        outputURL: outputURL,
+        width: outW,
+        height: outH,
+        maxFps: config.maxFps
+    )
+    let queue = DispatchQueue(label: "record-writer")
+    start["recording_id"] = delegate.recordingId
+    start["width"] = outW
+    start["height"] = outH
 
-        logEvent(
-            ("type", "record_start"),
-            ("engine", "native"),
-            ("output", outputPath),
-            ("recording_id", delegate.recordingId),
-            ("selector", resolved.selector),
-            ("windowId", Int(window.windowID)),
-            ("width", outW),
-            ("height", outH)
-        )
-
-        try await scStream.startCapture()
+    let stop: () async throws -> Void
+    switch source {
+    case .window(let filter, let streamConfig):
+        let stream = SCStream(filter: filter, configuration: streamConfig, delegate: delegate)
+        try stream.addStreamOutput(delegate, type: .screen, sampleHandlerQueue: queue)
+        emitJSONLine(start, toStderr: true)
+        try await stream.startCapture()
+        stop = { try await stopStream(stream) }
+    case .simulated(let frames):
+        emitJSONLine(start, toStderr: true)
+        let timer = runSimulatedInterruptedStream(frames: frames, fps: config.maxFps, queue: queue,
+                                                  onFrame: delegate.appendFrame, onStop: delegate.streamDidStop)
+        stop = { timer.cancel() }
     }
     if config.durationSeconds == nil {
         logEvent(("type", "record_waiting"), ("message", "Recording; press Ctrl-C to stop"))
     }
     await waitForRecordStop(duration: config.durationSeconds, delegate: delegate)
-    if delegate.streamFailure() == nil, let stream {
+    // A stream ScreenCaptureKit already stopped needs no stop call; a stop that races such an error is moot.
+    if delegate.streamFailure() == nil {
         do {
-            try await stopStream(stream)
+            try await stop()
         } catch {
             if delegate.streamFailure() == nil {
                 throw error
             }
         }
     }
-    // The stream has stopped (by us or by ScreenCaptureKit); drain queued writer callbacks before finalizing.
+    // stopCapture ends delivery; drain queued writer callbacks before finalizing.
     queue.sync {}
-    if let streamError = delegate.streamFailure() {
+    let streamError = delegate.streamFailure()
+    if let streamError, delegate.writtenFrames == 0 {
         // Nothing was written, so there is no partial recording to keep.
-        guard delegate.writtenFrames > 0 else { throw streamError }
-        try await delegate.finish()
-        let timingPath = try await delegate.writeTiming()
-        logStreamInterrupted(
-            frames: delegate.writtenFrames,
-            mediaTimeMs: delegate.lastMediaTimeMs,
-            cause: streamError,
-            context: [
-                "output": outputPath,
-                "recording_id": delegate.recordingId,
-                "timing_path": timingPath,
-                "bytes": (try? fm.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?.intValue ?? 0
-            ]
-        )
-        exit(streamInterruptedExitCode)
+        throw streamError
     }
     try await delegate.finish()
     let timingPath = try await delegate.writeTiming()
@@ -135,19 +115,36 @@ func runRecord(_ config: Config) async throws {
         throw CaptureError.recordFailed("recording produced an empty file: \(outputPath)")
     }
 
-    logEvent(
-        ("type", "record_complete"),
-        ("engine", "native"),
-        ("output", outputPath),
-        ("frames", delegate.writtenFrames),
-        ("recording_id", delegate.recordingId),
-        ("timing_path", timingPath),
-        ("bytes", size)
-    )
+    if let streamError {
+        logStreamInterrupted(
+            frames: delegate.writtenFrames,
+            mediaTimeMs: delegate.lastMediaTimeMs,
+            cause: streamError,
+            context: ["output": outputPath, "recording_id": delegate.recordingId, "timing_path": timingPath, "bytes": size]
+        )
+    } else {
+        logEvent(
+            ("type", "record_complete"),
+            ("engine", "native"),
+            ("output", outputPath),
+            ("frames", delegate.writtenFrames),
+            ("recording_id", delegate.recordingId),
+            ("timing_path", timingPath),
+            ("bytes", size)
+        )
+    }
 
     if config.openOutput {
         _ = openFile(path: outputPath)
     }
+    if streamError != nil {
+        exit(streamInterruptedExitCode)
+    }
+}
+
+private enum RecordSource {
+    case window(SCContentFilter, SCStreamConfiguration)
+    case simulated(frames: Int)
 }
 
 private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {

@@ -213,10 +213,12 @@ interrupted rather than discarding it. A `stream_stopped` diagnostic line still
 precedes the event. If the stream stops before any frame was written there is
 nothing to keep: the command fails with exit status 1 as before.
 
-`capture`/`stream` emit the same `stream_interrupted` event with the slot `index`
-(no `output`), flush frames already handed to the encoder to stdout, then emit
-`removed`. A non-framed `capture` with no window left exits with status 3; a
-framed `stream` keeps running so its controller can add windows.
+`capture`/`stream` flush frames already handed to the encoder to stdout, then emit
+the same `stream_interrupted` event with the slot `index` used by `added`/`removed`
+(no `output`; `frames` counts frames submitted to the encoder), then `removed`. The
+order on stderr is `stream_stopped`, `stream_interrupted`, `removed`. A non-framed
+`capture` with no window left exits with status 3 (it used to keep running with
+nothing to stream); a framed `stream` keeps running so its controller can add windows.
 
 ### `stream`
 
@@ -341,7 +343,7 @@ Current stable codes include:
 | `snapshot_failed` | Snapshot command resolved a window but image capture failed. |
 | `setup_failed` | Capture setup failed before streaming could start. |
 | `stream_stopped` | A running ScreenCaptureKit stream stopped with an error. |
-| `stream_interrupted` | The stream stopped mid-capture; frames captured so far were kept. Exit status 3. See [Stream interruption](#stream-interruption). |
+| `stream_interrupted` | The stream stopped mid-capture; frames captured so far were kept. `record` and non-framed `capture` exit with status 3; framed `stream` keeps running. See [Stream interruption](#stream-interruption). |
 | `invalid_index` | Framed stdin command used an invalid slot index. |
 | `window_slot_not_found` | Framed stdin command referenced a missing slot. |
 | `unknown_command` | Framed stdin command was not recognized. |

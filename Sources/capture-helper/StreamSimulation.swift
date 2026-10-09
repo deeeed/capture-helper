@@ -17,13 +17,15 @@ func simulatedInterruptFrameCount() -> Int? {
     return frames
 }
 
+/// Returns the frame timer; cancel it on the same queue to stop delivery early.
+@discardableResult
 func runSimulatedInterruptedStream(
     frames: Int,
     fps: Int32,
     queue: DispatchQueue,
     onFrame: @escaping (CVPixelBuffer, CMTime) -> Void,
     onStop: @escaping (Error) -> Void
-) {
+) -> DispatchSourceTimer {
     var sent = 0
     let timer = DispatchSource.makeTimerSource(queue: queue)
     timer.schedule(deadline: .now(), repeating: 1.0 / Double(fps))
@@ -41,6 +43,7 @@ func runSimulatedInterruptedStream(
         onFrame(frame, CMClockGetTime(CMClockGetHostTimeClock()))
     }
     timer.resume()
+    return timer
 }
 
 private func syntheticFrame(shade: UInt8) -> CVPixelBuffer? {

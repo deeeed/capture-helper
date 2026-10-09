@@ -223,6 +223,7 @@ final class CaptureHelperTests: XCTestCase {
 
         XCTAssertEqual(result.status, 1, result.stderr)
         XCTAssertFalse(result.stderr.contains("stream_interrupted"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output))
         XCTAssertFalse(FileManager.default.fileExists(atPath: output + ".timing.json"))
     }
 
@@ -276,6 +277,10 @@ final class CaptureHelperTests: XCTestCase {
         process.standardError = stderr
 
         try process.run()
+        // Fail fast instead of hanging the suite if the helper stops exiting on its own.
+        let watchdog = DispatchWorkItem { process.terminate() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 20, execute: watchdog)
+        defer { watchdog.cancel() }
         // Drain both pipes before waiting so binary stdout larger than the pipe buffer cannot block the child.
         var stderrData = Data()
         let stderrDrained = DispatchSemaphore(value: 0)
