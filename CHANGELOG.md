@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-09
+
 ### Fixed
 
 - A ScreenCaptureKit stream that stops mid-recording (e.g. `SCStreamErrorDomain -3805`, app connection interrupted, or `-3815`, window gone) no longer loses the recording. `record` finalizes the MP4 and timing sidecar written so far, emits `{"type":"error","code":"stream_interrupted","frames":N,"media_time_ms":T,"cause":"…"}` and exits with status 3. `capture` emits the same event per window and a non-framed capture exits with status 3 once no window is left.
@@ -141,7 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Earlier 0.1.x releases: native MP4 recording, human-readable CLI output, window
   discovery, capture, snapshot, and streaming on macOS (ScreenCaptureKit).
 
-[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/deeeed/capture-helper/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/deeeed/capture-helper/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/deeeed/capture-helper/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/deeeed/capture-helper/compare/v0.2.4...v0.2.5
