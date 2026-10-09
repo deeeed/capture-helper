@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A ScreenCaptureKit stream that stops mid-recording (e.g. `SCStreamErrorDomain -3805`, app connection interrupted, or `-3815`, window gone) no longer loses the recording. `record` finalizes the MP4 and timing sidecar written so far, emits `{"type":"error","code":"stream_interrupted","frames":N,"media_time_ms":T,"cause":"…"}` and exits with status 3. `capture` emits the same event per window and a non-framed capture exits with status 3 once no window is left.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added

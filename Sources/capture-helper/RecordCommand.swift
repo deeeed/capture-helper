@@ -24,69 +24,109 @@ func runRecord(_ config: Config) async throws {
     let priorTiming = outputPath + ".timing.json"
     if fm.fileExists(atPath: priorTiming) { try fm.removeItem(atPath: priorTiming) }
 
-    let resolved = try await resolveTarget(config)
-    let window = resolved.window
-    if !resolved.onScreenIds.contains(window.windowID) {
-        logErrorMessage(
-            code: "offscreen_window_warning",
-            message: "selected window is off-screen; recording may produce no frames. Use `capture-helper list --on-screen --capturable --human` for safer targets.",
-            context: ["windowId": Int(window.windowID)]
-        )
-    }
-    let srcW = Int(window.frame.width)
-    let srcH = Int(window.frame.height)
-    let scale = min(Double(config.maxSize) / Double(max(srcW, srcH)), 1.0)
-    let outW = max(2, Int(Double(srcW) * scale) & ~1)
-    let outH = max(2, Int(Double(srcH) * scale) & ~1)
-
-    let filter = SCContentFilter(desktopIndependentWindow: window)
-    let streamConfig = SCStreamConfiguration()
-    streamConfig.minimumFrameInterval = CMTime(value: 1, timescale: config.maxFps)
-    streamConfig.width = outW
-    streamConfig.height = outH
-    streamConfig.pixelFormat = kCVPixelFormatType_32BGRA
-    streamConfig.showsCursor = false
-    streamConfig.queueDepth = 5
-
-    let delegate = NativeRecordDelegate(
-        outputURL: outputURL,
-        width: outW,
-        height: outH,
-        maxFps: config.maxFps
-    )
-    let stream = SCStream(filter: filter, configuration: streamConfig, delegate: delegate)
     let queue = DispatchQueue(label: "record-writer")
-    try stream.addStreamOutput(delegate, type: .screen, sampleHandlerQueue: queue)
+    let delegate: NativeRecordDelegate
+    let stream: SCStream?
+    if let simulatedFrames = simulatedInterruptFrameCount() {
+        delegate = NativeRecordDelegate(
+            outputURL: outputURL,
+            width: simulatedFrameWidth,
+            height: simulatedFrameHeight,
+            maxFps: config.maxFps
+        )
+        stream = nil
+        logEvent(
+            ("type", "record_start"),
+            ("engine", "native"),
+            ("output", outputPath),
+            ("recording_id", delegate.recordingId),
+            ("selector", "simulated"),
+            ("width", simulatedFrameWidth),
+            ("height", simulatedFrameHeight)
+        )
+        runSimulatedInterruptedStream(frames: simulatedFrames, fps: config.maxFps, queue: queue,
+                                      onFrame: delegate.appendFrame, onStop: delegate.streamDidStop)
+    } else {
+        let resolved = try await resolveTarget(config)
+        let window = resolved.window
+        if !resolved.onScreenIds.contains(window.windowID) {
+            logErrorMessage(
+                code: "offscreen_window_warning",
+                message: "selected window is off-screen; recording may produce no frames. Use `capture-helper list --on-screen --capturable --human` for safer targets.",
+                context: ["windowId": Int(window.windowID)]
+            )
+        }
+        let srcW = Int(window.frame.width)
+        let srcH = Int(window.frame.height)
+        let scale = min(Double(config.maxSize) / Double(max(srcW, srcH)), 1.0)
+        let outW = max(2, Int(Double(srcW) * scale) & ~1)
+        let outH = max(2, Int(Double(srcH) * scale) & ~1)
 
-    logEvent(
-        ("type", "record_start"),
-        ("engine", "native"),
-        ("output", outputPath),
-        ("recording_id", delegate.recordingId),
-        ("selector", resolved.selector),
-        ("windowId", Int(window.windowID)),
-        ("width", outW),
-        ("height", outH)
-    )
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        let streamConfig = SCStreamConfiguration()
+        streamConfig.minimumFrameInterval = CMTime(value: 1, timescale: config.maxFps)
+        streamConfig.width = outW
+        streamConfig.height = outH
+        streamConfig.pixelFormat = kCVPixelFormatType_32BGRA
+        streamConfig.showsCursor = false
+        streamConfig.queueDepth = 5
 
-    try await stream.startCapture()
+        delegate = NativeRecordDelegate(
+            outputURL: outputURL,
+            width: outW,
+            height: outH,
+            maxFps: config.maxFps
+        )
+        let scStream = SCStream(filter: filter, configuration: streamConfig, delegate: delegate)
+        try scStream.addStreamOutput(delegate, type: .screen, sampleHandlerQueue: queue)
+        stream = scStream
+
+        logEvent(
+            ("type", "record_start"),
+            ("engine", "native"),
+            ("output", outputPath),
+            ("recording_id", delegate.recordingId),
+            ("selector", resolved.selector),
+            ("windowId", Int(window.windowID)),
+            ("width", outW),
+            ("height", outH)
+        )
+
+        try await scStream.startCapture()
+    }
     if config.durationSeconds == nil {
         logEvent(("type", "record_waiting"), ("message", "Recording; press Ctrl-C to stop"))
     }
     await waitForRecordStop(duration: config.durationSeconds, delegate: delegate)
-    if let streamError = delegate.streamFailure() {
-        throw streamError
-    }
-    do {
-        try await stopStream(stream)
-    } catch {
-        if let streamError = delegate.streamFailure() {
-            throw streamError
+    if delegate.streamFailure() == nil, let stream {
+        do {
+            try await stopStream(stream)
+        } catch {
+            if delegate.streamFailure() == nil {
+                throw error
+            }
         }
-        throw error
     }
-    // stopCapture ends delivery; drain queued writer callbacks before finalizing.
+    // The stream has stopped (by us or by ScreenCaptureKit); drain queued writer callbacks before finalizing.
     queue.sync {}
+    if let streamError = delegate.streamFailure() {
+        // Nothing was written, so there is no partial recording to keep.
+        guard delegate.writtenFrames > 0 else { throw streamError }
+        try await delegate.finish()
+        let timingPath = try await delegate.writeTiming()
+        logStreamInterrupted(
+            frames: delegate.writtenFrames,
+            mediaTimeMs: delegate.lastMediaTimeMs,
+            cause: streamError,
+            context: [
+                "output": outputPath,
+                "recording_id": delegate.recordingId,
+                "timing_path": timingPath,
+                "bytes": (try? fm.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?.intValue ?? 0
+            ]
+        )
+        exit(streamInterruptedExitCode)
+    }
     try await delegate.finish()
     let timingPath = try await delegate.writeTiming()
 
@@ -135,6 +175,7 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     private var latestPixelBuffer: CVPixelBuffer?
 
     var writtenFrames: Int { frameCount }
+    var lastMediaTimeMs: Double { lastWrittenPts.isValid ? CMTimeGetSeconds(lastWrittenPts) * 1000 : 0 }
 
     init(outputURL: URL, width: Int, height: Int, maxFps: Int32) {
         self.outputURL = outputURL
@@ -178,6 +219,10 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
+        streamDidStop(with: error)
+    }
+
+    func streamDidStop(with error: Error) {
         stopLock.lock()
         streamError = error
         let stop = stopHandler
@@ -206,8 +251,11 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
               let status = attachments.first?[.status] as? Int,
               status == SCFrameStatus.complete.rawValue else { return }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let sourcePts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        guard sourcePts.isNumeric else { return }
+        appendFrame(pixelBuffer, sourcePts: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+    }
+
+    func appendFrame(_ pixelBuffer: CVPixelBuffer, sourcePts: CMTime) {
+        guard !didFinish, sourcePts.isNumeric else { return }
         latestFrameLock.lock()
         defer { latestFrameLock.unlock() }
         if firstPts == nil {
@@ -325,11 +373,6 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     }
 
     func finish() async throws {
-        let error = streamFailure()
-        if let error {
-            throw error
-        }
-
         guard didStartWriting else {
             writer.cancelWriting()
             throw CaptureError.recordFailed("recording finished before any frames were captured. The window may be minimized, hidden, offscreen, fully occluded, or not refreshing. Try `capture-helper list --on-screen --human` and select an on-screen window.")

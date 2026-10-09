@@ -4,6 +4,7 @@ final class CaptureHelperTests: XCTestCase {
     struct CommandResult {
         let status: Int32
         let stdout: String
+        let stdoutData: Data
         let stderr: String
     }
 
@@ -188,8 +189,73 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertEqual(error["message"] as? String, "snapshot requires --output PATH")
     }
 
-    private func runHelper(_ arguments: [String]) throws -> CommandResult {
-        try runCommand(executableURL: helperURL(), arguments: arguments)
+    func testRecordKeepsPartialVideoWhenStreamIsInterrupted() throws {
+        let dir = try makeTempDirectory()
+        let output = dir.appendingPathComponent("interrupted.mp4").path
+        let result = try runHelper(["record", "--window-id", "1", "--output", output],
+                                   simulatedInterruptAfterFrames: 10)
+
+        XCTAssertEqual(result.status, 3, result.stderr)
+        XCTAssertFalse(result.stderr.contains("record_complete"), result.stderr)
+        let event = try parseLastJSONLine(result.stderr)
+        XCTAssertEqual(event["type"] as? String, "error")
+        XCTAssertEqual(event["code"] as? String, "stream_interrupted")
+        XCTAssertEqual(event["frames"] as? Int, 10)
+        XCTAssertGreaterThan(event["media_time_ms"] as? Double ?? 0, 0)
+        XCTAssertEqual(event["cause"] as? String,
+                       "com.apple.ScreenCaptureKit.SCStreamErrorDomain -3805: Failed during stream due to application connection being interrupted")
+        XCTAssertEqual(event["output"] as? String, output)
+        XCTAssertGreaterThan(event["bytes"] as? Int ?? 0, 0)
+
+        // The timing sidecar is read back from the finalized MP4, so its frame list proves the file is playable.
+        let timingPath = try XCTUnwrap(event["timing_path"] as? String)
+        XCTAssertEqual(timingPath, output + ".timing.json")
+        let timing = try parseJSONObject(String(contentsOfFile: timingPath, encoding: .utf8))
+        XCTAssertEqual((timing["frames_ms"] as? [Double])?.count, 10)
+        XCTAssertEqual(timing["recording_id"] as? String, event["recording_id"] as? String)
+    }
+
+    func testRecordInterruptedBeforeAnyFrameFailsWithoutPartialVideo() throws {
+        let dir = try makeTempDirectory()
+        let output = dir.appendingPathComponent("empty.mp4").path
+        let result = try runHelper(["record", "--window-id", "1", "--output", output],
+                                   simulatedInterruptAfterFrames: 0)
+
+        XCTAssertEqual(result.status, 1, result.stderr)
+        XCTAssertFalse(result.stderr.contains("stream_interrupted"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output + ".timing.json"))
+    }
+
+    func testCaptureReportsStreamInterruptionAndExits() throws {
+        let result = try runHelper(["capture", "--window-id", "1"], simulatedInterruptAfterFrames: 10)
+
+        XCTAssertEqual(result.status, 3, result.stderr)
+        let lines = try result.stderr.split(separator: "\n").map { try parseJSONObject(String($0)) }
+        let event = try XCTUnwrap(lines.first { $0["code"] as? String == "stream_interrupted" }, result.stderr)
+        XCTAssertEqual(event["index"] as? Int, 0)
+        let frames = event["frames"] as? Int ?? 0
+        XCTAssertTrue((1...10).contains(frames), "frames=\(frames)")
+        XCTAssertNotNil(event["media_time_ms"] as? Double)
+        XCTAssertTrue((event["cause"] as? String ?? "").contains("SCStreamErrorDomain -3805"))
+        XCTAssertEqual(lines.last?["type"] as? String, "removed")
+        // Frames handed to the encoder were flushed to stdout as Annex-B H.264.
+        XCTAssertEqual(Array(result.stdoutData.prefix(4)), [0, 0, 0, 1])
+    }
+
+    private func runHelper(_ arguments: [String], simulatedInterruptAfterFrames: Int? = nil) throws -> CommandResult {
+        var environment: [String: String]? = nil
+        if let simulatedInterruptAfterFrames {
+            environment = ProcessInfo.processInfo.environment
+            environment?["CAPTURE_HELPER_TEST_INTERRUPT_AFTER_FRAMES"] = String(simulatedInterruptAfterFrames)
+        }
+        return try runCommand(executableURL: helperURL(), arguments: arguments, environment: environment)
+    }
+
+    private func makeTempDirectory() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("capture-helper-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
     }
 
     private func runCommand(
@@ -208,14 +274,21 @@ final class CaptureHelperTests: XCTestCase {
         process.standardError = stderr
 
         try process.run()
-        process.waitUntilExit()
-
+        // Drain both pipes before waiting so binary stdout larger than the pipe buffer cannot block the child.
+        var stderrData = Data()
+        let stderrDrained = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+            stderrDrained.signal()
+        }
         let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+        stderrDrained.wait()
+        process.waitUntilExit()
 
         return CommandResult(
             status: process.terminationStatus,
             stdout: String(data: stdoutData, encoding: .utf8) ?? "",
+            stdoutData: stdoutData,
             stderr: String(data: stderrData, encoding: .utf8) ?? ""
         )
     }
@@ -245,6 +318,14 @@ final class CaptureHelperTests: XCTestCase {
             return [:]
         }
         return dictionary
+    }
+
+    private func parseLastJSONLine(_ text: String) throws -> [String: Any] {
+        guard let line = text.split(separator: "\n").last else {
+            XCTFail("Expected JSON line, got empty text")
+            return [:]
+        }
+        return try parseJSONObject(String(line))
     }
 
     private func parseFirstJSONLine(_ text: String) throws -> [String: Any] {

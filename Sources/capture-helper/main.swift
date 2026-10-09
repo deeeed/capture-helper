@@ -22,6 +22,13 @@ func installSignalHandlers() {
 }
 
 func addInitialCaptures(_ config: Config) async throws {
+    if let frames = simulatedInterruptFrameCount() {
+        let slot = try addSimulatedWindowCapture(frames: frames)
+        logEvent(("type", "added"), ("index", Int(slot.index)),
+                 ("name", slot.name), ("width", slot.outWidth), ("height", slot.outHeight))
+        return
+    }
+
     if let windowId = config.initialWindowId {
         let window = try await findWindowById(windowId)
         let name = window.title ?? "id:\(windowId)"
