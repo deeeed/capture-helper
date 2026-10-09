@@ -230,7 +230,9 @@ final class CaptureHelperTests: XCTestCase {
         let result = try runHelper(["capture", "--window-id", "1"], simulatedInterruptAfterFrames: 10)
 
         XCTAssertEqual(result.status, 3, result.stderr)
-        let lines = try result.stderr.split(separator: "\n").map { try parseJSONObject(String($0)) }
+        // CI runners can add non-JSON system log lines to stderr; only our JSON events matter here.
+        let lines = result.stderr.split(separator: "\n")
+            .compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
         let event = try XCTUnwrap(lines.first { $0["code"] as? String == "stream_interrupted" }, result.stderr)
         XCTAssertEqual(event["index"] as? Int, 0)
         let frames = event["frames"] as? Int ?? 0
