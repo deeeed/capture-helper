@@ -241,8 +241,7 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertEqual(result.status, 0, result.stderr)
         XCTAssertTrue(FileManager.default.fileExists(atPath: active), result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: stopped), result.stderr)
-        let events = try result.stderr.split(separator: "\n")
-            .filter { $0.hasPrefix("{") }.map { try parseJSONObject(String($0)) }
+        let events = try parseJSONEvents(result.stderr)
         let failure = try XCTUnwrap(events.first { ($0["output"] as? String) == stopped })
         XCTAssertEqual(failure["code"] as? String, "snapshot_failed")
         XCTAssertEqual(failure["message"] as? String, "recording session is no longer active")
@@ -263,8 +262,7 @@ final class CaptureHelperTests: XCTestCase {
 
         XCTAssertEqual(result.status, 3, result.stderr)
         XCTAssertFalse(FileManager.default.fileExists(atPath: stopped), result.stderr)
-        let events = try result.stderr.split(separator: "\n")
-            .filter { $0.hasPrefix("{") }.map { try parseJSONObject(String($0)) }
+        let events = try parseJSONEvents(result.stderr)
         let failure = try XCTUnwrap(events.first { ($0["output"] as? String) == stopped })
         XCTAssertEqual(failure["code"] as? String, "snapshot_failed")
         XCTAssertEqual(failure["message"] as? String, "recording session is no longer active")
@@ -375,6 +373,11 @@ final class CaptureHelperTests: XCTestCase {
         }
         XCTFail("capture-helper binary not found in .build/debug or .build/release")
         return candidates[0]
+    }
+
+    private func parseJSONEvents(_ text: String) throws -> [[String: Any]] {
+        try text.split(separator: "\n")
+            .filter { $0.hasPrefix("{") }.map { try parseJSONObject(String($0)) }
     }
 
     private func parseJSONObject(_ text: String) throws -> [String: Any] {
