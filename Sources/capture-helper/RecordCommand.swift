@@ -166,6 +166,7 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     private var didFinish = false
     private var frameCount = 0
     private var streamError: Error?
+    private var snapshotsStopped = false
     private var stopHandler: (() -> Void)?
     private let stopLock = NSLock()
     private let latestFrameLock = NSLock()
@@ -222,6 +223,7 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     func streamDidStop(with error: Error) {
         stopLock.lock()
         streamError = error
+        snapshotsStopped = true
         let stop = stopHandler
         stopLock.unlock()
         logErrorMessage(code: "stream_stopped", message: "record stream stopped: \(error)")
@@ -240,6 +242,10 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
 
     func streamFailure() -> Error? {
         stopLock.withLock { streamError }
+    }
+
+    func stopSnapshots() {
+        stopLock.withLock { snapshotsStopped = true }
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -309,6 +315,11 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     }
 
     func writeSnapshot(to outputPath: String) throws -> [String: Any] {
+        stopLock.lock()
+        defer { stopLock.unlock() }
+        guard !snapshotsStopped else {
+            throw CaptureError.snapshotFailed("recording session is no longer active")
+        }
         latestFrameLock.lock()
         let pixelBuffer = latestPixelBuffer
         let mediaMs = latestMediaMs
@@ -611,6 +622,7 @@ private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate
             defer { state.lock.unlock() }
             guard !state.didResume else { return }
             state.didResume = true
+            delegate.stopSnapshots()
             for source in state.sources {
                 source.cancel()
             }

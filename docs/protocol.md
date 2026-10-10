@@ -159,6 +159,11 @@ stop
 
 Record-session snapshots are PNG files written from the active recording frame. On macOS they are encoded natively in Swift and do not require `ffmpeg`. Consumers should check `version --json` for the `record_session_snapshot` capability before using this protocol.
 
+After recording stops, session snapshot commands fail with `snapshot_failed`
+and do not write an output file. This includes a `stop` command, duration limit,
+signal, or stream interruption. Use a standalone `snapshot` for fresh evidence
+after the session ends.
+
 ### Native recording timing
 
 The optional macOS capability `record_session_timing_v1` adds timing to the same

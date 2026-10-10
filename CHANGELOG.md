@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Record-session snapshots fail with `snapshot_failed` after a stop command, duration limit, signal, or stream interruption instead of returning a cached frame. Already accepted snapshots finish before the stop takes effect.
+
 ## [0.3.1] - 2026-10-09
 
 ### Fixed
