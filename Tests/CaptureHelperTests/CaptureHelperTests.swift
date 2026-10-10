@@ -15,7 +15,7 @@ final class CaptureHelperTests: XCTestCase {
         let object = try parseJSONObject(result.stdout)
         XCTAssertEqual(object["name"] as? String, "@siteed/capture-helper")
         XCTAssertEqual(object["binary"] as? String, "capture-helper")
-        XCTAssertEqual(object["version"] as? String, "0.3.1")
+        XCTAssertEqual(object["version"] as? String, "0.3.2")
         XCTAssertNotNil(object["architecture"])
         XCTAssertNotNil(object["osVersion"])
         XCTAssertTrue((object["capabilities"] as? [String])?.contains("record_session_timing_v1") == true)
@@ -128,14 +128,14 @@ final class CaptureHelperTests: XCTestCase {
         let result = try runHelper(["version", "--human"])
 
         XCTAssertEqual(result.status, 0, result.stderr)
-        XCTAssertEqual(result.stdout, "capture-helper 0.3.1\n")
+        XCTAssertEqual(result.stdout, "capture-helper 0.3.2\n")
     }
 
     func testVersionSupportsShortHumanOutput() throws {
         let result = try runHelper(["version", "-h"])
 
         XCTAssertEqual(result.status, 0, result.stderr)
-        XCTAssertEqual(result.stdout, "capture-helper 0.3.1\n")
+        XCTAssertEqual(result.stdout, "capture-helper 0.3.2\n")
     }
 
     func testHelpCommandShowsUsage() throws {
@@ -234,7 +234,8 @@ final class CaptureHelperTests: XCTestCase {
         let stopped = dir.appendingPathComponent("stopped.png").path
         let result = try runHelper(
             ["record", "--framed", "--window-id", "1", "--output", output],
-            simulatedInterruptAfterFrames: 30,
+            // Only the explicit stop should end this stream, even if PNG encoding is slow.
+            simulatedInterruptAfterFrames: Int.max,
             inputCommands: "snapshot \(active)\nstop\nsnapshot \(stopped)\n"
         )
 
