@@ -227,6 +227,49 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: output + ".timing.json"))
     }
 
+    func testRecordRejectsSessionSnapshotAfterStop() throws {
+        let dir = try makeTempDirectory()
+        let output = dir.appendingPathComponent("recording.mp4").path
+        let active = dir.appendingPathComponent("active.png").path
+        let stopped = dir.appendingPathComponent("stopped.png").path
+        let result = try runHelper(
+            ["record", "--framed", "--window-id", "1", "--output", output],
+            simulatedInterruptAfterFrames: 30,
+            inputCommands: "snapshot \(active)\nstop\nsnapshot \(stopped)\n"
+        )
+
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: active), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stopped), result.stderr)
+        let events = try result.stderr.split(separator: "\n")
+            .filter { $0.hasPrefix("{") }.map { try parseJSONObject(String($0)) }
+        let failure = try XCTUnwrap(events.first { ($0["output"] as? String) == stopped })
+        XCTAssertEqual(failure["code"] as? String, "snapshot_failed")
+        XCTAssertEqual(failure["message"] as? String, "recording session is no longer active")
+        let timing = try parseJSONObject(String(contentsOfFile: output + ".timing.json", encoding: .utf8))
+        XCTAssertEqual((timing["snapshots"] as? [[String: Any]])?.count, 1)
+    }
+
+    func testRecordRejectsSessionSnapshotAfterStreamInterruption() throws {
+        let dir = try makeTempDirectory()
+        let output = dir.appendingPathComponent("interrupted.mp4").path
+        let stopped = dir.appendingPathComponent("stopped.png").path
+        let result = try runHelper(
+            ["record", "--framed", "--window-id", "1", "--output", output],
+            simulatedInterruptAfterFrames: 10,
+            inputCommands: "snapshot \(stopped)\n",
+            inputEvent: "stream_stopped"
+        )
+
+        XCTAssertEqual(result.status, 3, result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stopped), result.stderr)
+        let events = try result.stderr.split(separator: "\n")
+            .filter { $0.hasPrefix("{") }.map { try parseJSONObject(String($0)) }
+        let failure = try XCTUnwrap(events.first { ($0["output"] as? String) == stopped })
+        XCTAssertEqual(failure["code"] as? String, "snapshot_failed")
+        XCTAssertEqual(failure["message"] as? String, "recording session is no longer active")
+    }
+
     func testCaptureReportsStreamInterruptionAndExits() throws {
         let result = try runHelper(["capture", "--window-id", "1"], simulatedInterruptAfterFrames: 10)
 
@@ -245,13 +288,15 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertEqual(Array(result.stdoutData.prefix(4)), [0, 0, 0, 1])
     }
 
-    private func runHelper(_ arguments: [String], simulatedInterruptAfterFrames: Int? = nil) throws -> CommandResult {
+    private func runHelper(_ arguments: [String], simulatedInterruptAfterFrames: Int? = nil,
+                           inputCommands: String? = nil, inputEvent: String = "record_ready") throws -> CommandResult {
         var environment: [String: String]? = nil
         if let simulatedInterruptAfterFrames {
             environment = ProcessInfo.processInfo.environment
             environment?["CAPTURE_HELPER_TEST_INTERRUPT_AFTER_FRAMES"] = String(simulatedInterruptAfterFrames)
         }
-        return try runCommand(executableURL: helperURL(), arguments: arguments, environment: environment)
+        return try runCommand(executableURL: helperURL(), arguments: arguments, environment: environment,
+                              inputCommands: inputCommands, inputEvent: inputEvent)
     }
 
     private func makeTempDirectory() throws -> URL {
@@ -264,7 +309,9 @@ final class CaptureHelperTests: XCTestCase {
     private func runCommand(
         executableURL: URL,
         arguments: [String],
-        environment: [String: String]? = nil
+        environment: [String: String]? = nil,
+        inputCommands: String? = nil,
+        inputEvent: String = "record_ready"
     ) throws -> CommandResult {
         let process = Process()
         process.executableURL = executableURL
@@ -275,6 +322,8 @@ final class CaptureHelperTests: XCTestCase {
         let stderr = Pipe()
         process.standardOutput = stdout
         process.standardError = stderr
+        let stdin = Pipe()
+        if inputCommands != nil { process.standardInput = stdin }
 
         try process.run()
         // Fail fast instead of hanging the suite if the helper stops exiting on its own.
@@ -285,7 +334,18 @@ final class CaptureHelperTests: XCTestCase {
         var stderrData = Data()
         let stderrDrained = DispatchSemaphore(value: 0)
         DispatchQueue.global().async {
-            stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+            var sentCommands = false
+            while true {
+                let chunk = stderr.fileHandleForReading.availableData
+                if chunk.isEmpty { break }
+                stderrData.append(chunk)
+                if let inputCommands, !sentCommands,
+                   String(data: stderrData, encoding: .utf8)?.contains("\"\(inputEvent)\"") == true {
+                    sentCommands = true
+                    stdin.fileHandleForWriting.write(Data(inputCommands.utf8))
+                    stdin.fileHandleForWriting.closeFile()
+                }
+            }
             stderrDrained.signal()
         }
         let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
