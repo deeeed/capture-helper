@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-14
+
 ### Fixed
 
 - ScreenCaptureKit commands now hold exclusive host access for the login user. A competing doctor, list, resolve, snapshot or recording returns `capture_busy` before connecting, so its exit cannot interrupt an active recording through replayd's shared executable identity. Access is released automatically when the process exits.
@@ -157,7 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Earlier 0.1.x releases: native MP4 recording, human-readable CLI output, window
   discovery, capture, snapshot, and streaming on macOS (ScreenCaptureKit).
 
-[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/deeeed/capture-helper/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/deeeed/capture-helper/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/deeeed/capture-helper/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/deeeed/capture-helper/compare/v0.2.6...v0.3.0
