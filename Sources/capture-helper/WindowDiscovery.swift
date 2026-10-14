@@ -3,6 +3,7 @@ import ScreenCaptureKit
 import CoreGraphics
 
 enum CaptureError: Error, CustomStringConvertible {
+    case captureBusy(String)
     case windowNotFound(String)
     case setupFailed(String)
     case targetRequired(String)
@@ -12,6 +13,7 @@ enum CaptureError: Error, CustomStringConvertible {
 
     var description: String {
         switch self {
+        case .captureBusy(let message): return message
         case .windowNotFound(let message): return message
         case .setupFailed(let message): return message
         case .targetRequired(let message): return message

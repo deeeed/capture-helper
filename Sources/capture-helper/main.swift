@@ -57,6 +57,17 @@ let config = parseArgs()
 Runtime.config = config
 setbuf(stdout, nil)
 
+// Doctor reports lock contention as a required window-enumeration failure.
+// Version and permission status do not connect to ScreenCaptureKit.
+if config.command != .doctor && config.command != .version && config.command != .permissions {
+    do {
+        try CaptureAccess.acquire()
+    } catch {
+        logError(error)
+        exit(1)
+    }
+}
+
 switch config.command {
 case .version:
     printVersion(json: config.json)

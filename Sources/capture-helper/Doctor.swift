@@ -146,6 +146,7 @@ func doctorChecks() async -> [DoctorCheck] {
 
 func windowEnumerationCheck() async -> DoctorCheck {
     do {
+        try CaptureAccess.acquire()
         let windows = try await allWindowObjects()
         let capturable = windows.filter { window in
             let width = window["width"] as? Int ?? 0
@@ -194,6 +195,9 @@ func screenRecordingDetails(error: Error, code: String) -> [String: Any] {
 }
 
 func classifyWindowEnumerationError(_ error: Error) -> (code: String, message: String) {
+    if let captureError = error as? CaptureError {
+        return (captureError.code, captureError.description)
+    }
     if isScreenRecordingDeniedError(error) {
         return (DoctorCode.screenRecordingDenied, screenRecordingDeniedMessage())
     }

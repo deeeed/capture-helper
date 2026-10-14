@@ -202,6 +202,18 @@ removed when recording starts. A held last frame is not a new observation.
 
 ### Stream interruption
 
+On macOS, ScreenCaptureKit commands are exclusive across capture-helper processes
+for the same login user on the host, including different installs and launchers.
+`record` and `capture` hold access until they exit. Competing `doctor`, `list`,
+`resolve`, `snapshot`, `record` or `capture` calls fail immediately with
+`capture_busy` without contacting ScreenCaptureKit. Doctor preserves its report
+shape and returns this code in the required window-enumeration check. Wait for
+the active command to finish before retrying. Version and permission status
+remain available. In-session recording snapshots use the active stream and
+remain available. A process exit or crash releases access; no manual lock
+deletion is needed. All callers must use a version with this guard; older
+capture-helper binaries do not participate.
+
 ScreenCaptureKit can stop a running stream on its own, for example when the
 captured app's connection drops (`SCStreamErrorDomain -3805`) or the window goes
 away (`-3815`). If `record` has already written frames, it finalizes the MP4 and
