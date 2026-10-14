@@ -3,6 +3,7 @@ import Foundation
 extension CaptureError {
     var code: String {
         switch self {
+        case .captureBusy: return "capture_busy"
         case .windowNotFound: return "window_not_found"
         case .setupFailed: return "setup_failed"
         case .targetRequired: return "target_required"

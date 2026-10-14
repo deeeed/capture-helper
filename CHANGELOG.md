@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- ScreenCaptureKit commands now hold exclusive host access for the login user. A competing doctor, list, resolve, snapshot or recording returns `capture_busy` before connecting, so its exit cannot interrupt an active recording through replayd's shared executable identity. Access is released automatically when the process exits.
+
 ## [0.3.2] - 2026-10-10
 
 ### Fixed

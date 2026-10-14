@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 
 final class CaptureHelperTests: XCTestCase {
     struct CommandResult {
@@ -285,6 +286,121 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertEqual(lines.last?["type"] as? String, "removed")
         // Frames handed to the encoder were flushed to stdout as Annex-B H.264.
         XCTAssertEqual(Array(result.stdoutData.prefix(4)), [0, 0, 0, 1])
+    }
+
+    func testCaptureAccessRefusesEveryCompetingSCKCommandBeforeTouchingOutput() throws {
+        let dir = try makeTempDirectory()
+        let environment = accessEnvironment(dir)
+        let fd = open(dir.appendingPathComponent("access.lock").path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        XCTAssertGreaterThanOrEqual(fd, 0)
+        defer { close(fd) }
+        XCTAssertEqual(flock(fd, LOCK_EX | LOCK_NB), 0)
+        let output = dir.appendingPathComponent("retained.mp4")
+        try Data("retained evidence".utf8).write(to: output)
+        for command in ["list", "resolve", "snapshot", "record", "capture", "stream"] {
+            let result = try runCommand(executableURL: helperURL(),
+                arguments: [command, "--window-id", "1", "--output", output.path], environment: environment)
+            XCTAssertEqual(result.status, 1, result.stderr)
+            XCTAssertEqual(try parseFirstJSONLine(result.stderr)["code"] as? String, "capture_busy", command)
+            XCTAssertEqual(try String(contentsOf: output), "retained evidence")
+        }
+        let doctor = try runCommand(executableURL: helperURL(), arguments: ["doctor", "--json"], environment: environment)
+        let report = try parseJSONObject(doctor.stdout)
+        XCTAssertEqual(doctor.status, 1, doctor.stderr)
+        XCTAssertEqual(report["ok"] as? Bool, false)
+        let checks = try XCTUnwrap(report["checks"] as? [[String: Any]])
+        let enumeration = try XCTUnwrap(checks.first { $0["id"] as? String == "window_enumeration" })
+        XCTAssertEqual(enumeration["code"] as? String, "capture_busy")
+        XCTAssertEqual(enumeration["required"] as? Bool, true)
+        let summary = try XCTUnwrap(report["summary"] as? [String: Any])
+        XCTAssertTrue((summary["requiredFailureCodes"] as? [String])?.contains("capture_busy") == true)
+        let version = try runCommand(executableURL: helperURL(), arguments: ["version"], environment: environment)
+        XCTAssertEqual(version.status, 0, version.stderr)
+        let permissions = try runCommand(executableURL: helperURL(), arguments: ["permissions", "--status-only"], environment: environment)
+        XCTAssertEqual(try parseJSONObject(permissions.stdout)["type"] as? String, "permissions")
+    }
+
+    func testRecordingKeepsAccessThroughSessionSnapshotsAndNormalCompletion() throws {
+        let dir = try makeTempDirectory()
+        let output = dir.appendingPathComponent("record.mp4")
+        let snapshot = dir.appendingPathComponent("snapshot.png")
+        let log = dir.appendingPathComponent("record.jsonl")
+        let stdin = Pipe()
+        let process = try startAccessOwner(dir, arguments: ["record", "--framed", "--window-id", "1", "--output", output.path],
+                                           stdin: stdin, log: log)
+        try waitUntil { (try? String(contentsOf: log).contains("\"record_ready\"")) == true }
+        let doctor = try runCommand(executableURL: helperURL(), arguments: ["doctor", "--json"], environment: accessEnvironment(dir))
+        XCTAssertEqual(doctor.status, 1, doctor.stdout)
+        XCTAssertTrue(doctor.stdout.contains("capture_busy"), doctor.stdout)
+        stdin.fileHandleForWriting.write(Data("snapshot \(snapshot.path)\nstop\n".utf8))
+        stdin.fileHandleForWriting.closeFile()
+        try waitUntil { !process.isRunning }
+        let logText = try String(contentsOf: log)
+        XCTAssertEqual(process.terminationStatus, 0, logText)
+        let events = try parseJSONEvents(logText)
+        XCTAssertTrue(events.contains { $0["type"] as? String == "snapshot" })
+        XCTAssertEqual(events.last?["type"] as? String, "record_complete")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: snapshot.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.path + ".timing.json"))
+        try assertAccessReleased(dir)
+    }
+
+    func testFramedStreamCrashReleasesCaptureAccess() throws {
+        let dir = try makeTempDirectory()
+        let log = dir.appendingPathComponent("stream.jsonl")
+        let stdin = Pipe()
+        let process = try startAccessOwner(dir, arguments: ["stream", "--window-id", "1"], stdin: stdin, log: log)
+        try waitUntil { (try? String(contentsOf: log).contains("\"added\"")) == true }
+        let contender = try runCommand(executableURL: helperURL(), arguments: ["list"], environment: accessEnvironment(dir))
+        XCTAssertEqual(try parseFirstJSONLine(contender.stderr)["code"] as? String, "capture_busy")
+        XCTAssertEqual(kill(process.processIdentifier, SIGKILL), 0)
+        try waitUntil { !process.isRunning }
+        try assertAccessReleased(dir)
+    }
+
+    private func accessEnvironment(_ dir: URL) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        environment["CAPTURE_HELPER_TEST_ACCESS_PATH"] = dir.appendingPathComponent("access.lock").path
+        return environment
+    }
+
+    private func startAccessOwner(_ dir: URL, arguments: [String], stdin: Pipe, log: URL) throws -> Process {
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        let stderr = try FileHandle(forWritingTo: log)
+        let process = Process()
+        process.executableURL = helperURL()
+        process.arguments = arguments
+        var environment = accessEnvironment(dir)
+        environment["CAPTURE_HELPER_TEST_INTERRUPT_AFTER_FRAMES"] = "10000"
+        process.environment = environment
+        process.standardInput = stdin
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = stderr
+        try process.run()
+        addTeardownBlock {
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            process.waitUntilExit()
+            try? stderr.close()
+        }
+        return process
+    }
+
+    private func waitUntil(_ predicate: () throws -> Bool) throws {
+        let deadline = Date().addingTimeInterval(2)
+        while try !predicate() {
+            if Date() >= deadline {
+                XCTFail("capture process did not reach the expected state within 2 seconds")
+                throw NSError(domain: "CaptureHelperTests", code: 1)
+            }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+    }
+
+    private func assertAccessReleased(_ dir: URL) throws {
+        // An invalid command never enumerates windows, but must acquire access
+        // before reaching argument validation. This is permission-independent.
+        let result = try runCommand(executableURL: helperURL(), arguments: ["record", "--window-id", "1"], environment: accessEnvironment(dir))
+        XCTAssertEqual(try parseFirstJSONLine(result.stderr)["code"] as? String, "target_required")
     }
 
     private func runHelper(_ arguments: [String], simulatedInterruptAfterFrames: Int? = nil,
