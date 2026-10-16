@@ -35,14 +35,7 @@ func runRecord(_ config: Config) async throws {
         outH = simulatedFrameHeight
     } else {
         let resolved = try await resolveTarget(config)
-        let window = resolved.window
-        if !resolved.onScreenIds.contains(window.windowID) {
-            logErrorMessage(
-                code: "offscreen_window_warning",
-                message: "selected window is off-screen; recording may produce no frames. Use `capture-helper list --on-screen --capturable --human` for safer targets.",
-                context: ["windowId": Int(window.windowID)]
-            )
-        }
+        let window = try await prepareRecordingWindow(resolved)
         let srcW = Int(window.frame.width)
         let srcH = Int(window.frame.height)
         let scale = min(Double(config.maxSize) / Double(max(srcW, srcH)), 1.0)
@@ -82,14 +75,20 @@ func runRecord(_ config: Config) async throws {
         stop = { try await stopStream(stream) }
     case .simulated(let frames):
         emitJSONLine(start, toStderr: true)
-        let timer = runSimulatedInterruptedStream(frames: frames, fps: config.maxFps, queue: queue,
-                                                  onFrame: delegate.appendFrame, onStop: delegate.streamDidStop)
+        let timer: DispatchSourceTimer
+        if ProcessInfo.processInfo.environment["CAPTURE_HELPER_TEST_STALL_BEFORE_FIRST_FRAME"] == "1" {
+            timer = DispatchSource.makeTimerSource(queue: queue)
+            timer.resume()
+        } else {
+            timer = runSimulatedInterruptedStream(frames: frames, fps: config.maxFps, queue: queue,
+                                                 onFrame: delegate.appendFrame, onStop: delegate.streamDidStop)
+        }
         stop = { timer.cancel() }
     }
     if config.durationSeconds == nil {
         logEvent(("type", "record_waiting"), ("message", "Recording; press Ctrl-C to stop"))
     }
-    await waitForRecordStop(duration: config.durationSeconds, delegate: delegate)
+    let firstFrameTimedOut = await waitForRecordStop(duration: config.durationSeconds, delegate: delegate)
     // A stream ScreenCaptureKit already stopped needs no stop call; a stop that races such an error is moot.
     if delegate.streamFailure() == nil {
         do {
@@ -102,6 +101,10 @@ func runRecord(_ config: Config) async throws {
     }
     // stopCapture ends delivery; drain queued writer callbacks before finalizing.
     queue.sync {}
+    if firstFrameTimedOut {
+        delegate.cancel()
+        throw CaptureError.recordFailed("No first video frame arrived within 3 seconds. The selected window may be off-screen, minimized or hidden; check its display and Accessibility permission before retrying.")
+    }
     let streamError = delegate.streamFailure()
     if let streamError, delegate.writtenFrames == 0 {
         // Nothing was written, so there is no partial recording to keep.
@@ -173,6 +176,7 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
     private var latestPixelBuffer: CVPixelBuffer?
 
     var writtenFrames: Int { frameCount }
+    var hasWrittenFrame: Bool { latestFrameLock.withLock { frameCount > 0 } }
     var lastMediaTimeMs: Double { lastWrittenPts.isValid ? CMTimeGetSeconds(lastWrittenPts) * 1000 : 0 }
 
     init(outputURL: URL, width: Int, height: Int, maxFps: Int32) {
@@ -404,6 +408,11 @@ private final class NativeRecordDelegate: NSObject, SCStreamOutput, SCStreamDele
             }
         }
     }
+
+    func cancel() {
+        didFinish = true
+        writer.cancelWriting()
+    }
 }
 
 
@@ -607,17 +616,18 @@ private func stopStream(_ stream: SCStream) async throws {
     }
 }
 
-private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate) async {
+private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate) async -> Bool {
     await withCheckedContinuation { continuation in
         final class StopState {
             var didResume = false
             var sources: [DispatchSourceSignal] = []
             var timer: DispatchSourceTimer?
+            var firstFrameTimer: DispatchSourceTimer?
             let lock = NSLock()
         }
 
         let state = StopState()
-        let resumeOnce = {
+        let finish = { (firstFrameTimedOut: Bool) in
             state.lock.lock()
             defer { state.lock.unlock() }
             guard !state.didResume else { return }
@@ -627,7 +637,15 @@ private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate
                 source.cancel()
             }
             state.timer?.cancel()
-            continuation.resume()
+            state.firstFrameTimer?.cancel()
+            continuation.resume(returning: firstFrameTimedOut)
+        }
+        let resumeOnce = { finish(false) }
+
+        let firstFrameTimer = DispatchSource.makeTimerSource(queue: .main)
+        firstFrameTimer.schedule(deadline: .now() + 3)
+        firstFrameTimer.setEventHandler {
+            if !delegate.hasWrittenFrame { finish(true) }
         }
 
         let timer: DispatchSourceTimer?
@@ -650,11 +668,13 @@ private func waitForRecordStop(duration: Double?, delegate: NativeRecordDelegate
         state.lock.lock()
         state.sources = sources
         state.timer = timer
+        state.firstFrameTimer = firstFrameTimer
         state.lock.unlock()
         for source in sources {
             source.resume()
         }
         timer?.resume()
+        firstFrameTimer.resume()
         delegate.stopOnStreamError(resumeOnce)
 
         if duration == nil && Runtime.config.framed {

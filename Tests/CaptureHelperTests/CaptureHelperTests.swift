@@ -320,6 +320,55 @@ final class CaptureHelperTests: XCTestCase {
         XCTAssertEqual(try parseJSONObject(permissions.stdout)["type"] as? String, "permissions")
     }
 
+    func testRecordingWindowPlacementPreservesViewportAndUsesVisibleDisplayCoordinates() throws {
+        let dir = try makeTempDirectory()
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        // Compile the actual pure placement function, without importing the CLI's main entry point.
+        let source = try String(contentsOf: root.appendingPathComponent("Sources/capture-helper/RecordingWindowGeometry.swift"))
+        let script = dir.appendingPathComponent("geometry.swift")
+        try (source + """
+
+        let display = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let offscreen = CGRect(x: 12000, y: 5000, width: 900, height: 700)
+        let placed = recordingWindowFrame(offscreen, displays: [display])!
+        precondition(display.contains(placed) && placed.size == offscreen.size)
+        precondition(placed.origin == CGPoint(x: 1020, y: 380))
+        let secondary = CGRect(x: -1920, y: -600, width: 1920, height: 1080)
+        let visible = CGRect(x: -1700, y: -400, width: 900, height: 700)
+        precondition(recordingWindowFrame(visible, displays: [secondary, display]) == visible)
+        let oversized = CGRect(x: -9000, y: -9000, width: 1600, height: 2400)
+        let small = CGRect(x: 0, y: 0, width: 800, height: 600)
+        let anchored = recordingWindowFrame(oversized, displays: [small])!
+        precondition(anchored.origin == small.origin && anchored.size == oversized.size)
+        precondition(small.intersects(anchored))
+        precondition(recordingWindowFrame(oversized, displays: []) == nil)
+        print("geometry verified")
+        """).write(to: script, atomically: true, encoding: .utf8)
+        let result = try runCommand(executableURL: URL(fileURLWithPath: "/usr/bin/swift"), arguments: [script.path])
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("geometry verified"), result.stdout)
+    }
+
+    func testRecordingWithoutAFirstFrameFailsFastInsteadOfWaitingForItsDuration() throws {
+        let dir = try makeTempDirectory()
+        var environment = accessEnvironment(dir)
+        environment["CAPTURE_HELPER_TEST_INTERRUPT_AFTER_FRAMES"] = "0"
+        environment["CAPTURE_HELPER_TEST_STALL_BEFORE_FIRST_FRAME"] = "1"
+        let started = Date()
+        let result = try runCommand(executableURL: helperURL(), arguments: [
+            "record", "--window-id", "1", "--duration", "30",
+            "--output", dir.appendingPathComponent("empty.mp4").path
+        ], environment: environment)
+        XCTAssertEqual(result.status, 1, result.stderr)
+        XCTAssertTrue(result.stderr.contains("No first video frame arrived within 3 seconds"), result.stderr)
+        XCTAssertTrue(result.stderr.contains("off-screen"), result.stderr)
+        XCTAssertFalse(result.stderr.contains("\"record_ready\""), result.stderr)
+        XCTAssertFalse(result.stderr.contains("\"record_complete\""), result.stderr)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 4.5)
+        try assertAccessReleased(dir)
+    }
+
     func testRecordingKeepsAccessThroughSessionSnapshotsAndNormalCompletion() throws {
         let dir = try makeTempDirectory()
         let output = dir.appendingPathComponent("record.mp4")

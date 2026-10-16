@@ -14,6 +14,7 @@ The CLI is intentionally generic. Product-specific concepts such as Farmslot slo
 
 - macOS 13.0+ (Apple Silicon or Intel)
 - Screen Recording permission for the terminal or parent app
+- Accessibility permission for that app when `record` must restore, move and raise an off-screen or minimized window. An already visible window needs only Screen Recording permission.
 - Optional: `ffmpeg` for external workflows that still want it; macOS `record` and `record --framed` session snapshots are native.
 - Swift/Xcode is only required when building from source — the published npm package and Homebrew formula ship a prebuilt universal binary.
 
