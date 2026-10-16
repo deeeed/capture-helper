@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-16
+
 ### Fixed
 
 - Native recording brings an off-screen or minimized selected window onto an active display before capture, preserving its size and exact window identity. A stream that produces no first frame stops after three seconds with a clear visibility error.
@@ -163,7 +165,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Earlier 0.1.x releases: native MP4 recording, human-readable CLI output, window
   discovery, capture, snapshot, and streaming on macOS (ScreenCaptureKit).
 
-[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/deeeed/capture-helper/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/deeeed/capture-helper/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/deeeed/capture-helper/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/deeeed/capture-helper/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/deeeed/capture-helper/compare/v0.3.0...v0.3.1
