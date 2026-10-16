@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Native recording brings an off-screen or minimized selected window onto an active display before capture, preserving its size and exact window identity. A stream that produces no first frame stops after three seconds with a clear visibility error.
+
 ## [0.3.3] - 2026-10-14
 
 ### Fixed
