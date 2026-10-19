@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Record-session snapshots write a deflated PNG instead of storing the scanlines uncompressed. Same format (8-bit RGBA, no filtering) and the same decoded pixels; a 976x1040 Terminal still drops from 4.06 MB to 342 KB.
+
 ## [0.3.4] - 2026-10-16
 
 ### Fixed
