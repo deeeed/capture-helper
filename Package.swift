@@ -23,7 +23,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CaptureHelperTests",
-            dependencies: []
+            dependencies: ["capture-helper"]
         )
     ]
 )

@@ -1,4 +1,5 @@
 import AVFoundation
+import Compression
 import CoreGraphics
 import CoreMedia
 import Foundation
@@ -466,7 +467,7 @@ private func copyPixelBuffer(_ source: CVPixelBuffer) -> CVPixelBuffer? {
 
 
 
-private func pngDataFromBgraPixelBuffer(_ pixelBuffer: CVPixelBuffer) throws -> Data {
+func pngDataFromBgraPixelBuffer(_ pixelBuffer: CVPixelBuffer) throws -> Data {
     CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
     defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
     guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
@@ -504,27 +505,31 @@ private func pngDataFromBgraPixelBuffer(_ pixelBuffer: CVPixelBuffer) throws -> 
     ihdr.append(0) // filter
     ihdr.append(0) // interlace
     appendPngChunk(type: "IHDR", payload: ihdr, to: &png)
-    appendPngChunk(type: "IDAT", payload: zlibStoredStream(scanlines), to: &png)
+    appendPngChunk(type: "IDAT", payload: try zlibDeflateStream(scanlines), to: &png)
     appendPngChunk(type: "IEND", payload: Data(), to: &png)
     return png
 }
 
-private func zlibStoredStream(_ payload: Data) -> Data {
-    var data = Data([0x78, 0x01]) // zlib header, fastest/no compression
-    var offset = 0
-    while offset < payload.count {
-        let remaining = payload.count - offset
-        let length = min(remaining, 65_535)
-        data.append(offset + length >= payload.count ? 0x01 : 0x00) // final block + stored block type
-        let len = UInt16(length)
-        let nlen = ~len
-        data.append(UInt8(len & 0xff))
-        data.append(UInt8((len >> 8) & 0xff))
-        data.append(UInt8(nlen & 0xff))
-        data.append(UInt8((nlen >> 8) & 0xff))
-        data.append(payload.subdata(in: offset..<(offset + length)))
-        offset += length
+/// A zlib stream (RFC 1950) around Compression's raw DEFLATE at zlib level 5. The scanlines
+/// are unchanged, so the PNG decodes to the same pixels the stored stream it replaced held.
+private func zlibDeflateStream(_ payload: Data) throws -> Data {
+    // DEFLATE adds at most a few bytes per block to incompressible input.
+    let capacity = payload.count + payload.count / 64 + 64
+    var deflated = Data(count: capacity)
+    let written = deflated.withUnsafeMutableBytes { output in
+        payload.withUnsafeBytes { input in
+            compression_encode_buffer(
+                output.bindMemory(to: UInt8.self).baseAddress!, capacity,
+                input.bindMemory(to: UInt8.self).baseAddress!, payload.count,
+                nil, COMPRESSION_ZLIB
+            )
+        }
     }
+    guard written > 0 else {
+        throw CaptureError.snapshotFailed("could not compress the snapshot PNG")
+    }
+    var data = Data([0x78, 0x5e]) // zlib header: deflate, 32 KB window, level 2-5
+    data.append(deflated.prefix(written))
     appendBigEndianUInt32(adler32(payload), to: &data)
     return data
 }
