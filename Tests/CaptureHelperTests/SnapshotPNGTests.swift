@@ -2,6 +2,7 @@ import CoreVideo
 import Foundation
 import ImageIO
 import XCTest
+import zlib
 @testable import capture_helper
 
 final class SnapshotPNGTests: XCTestCase {
@@ -44,10 +45,19 @@ final class SnapshotPNGTests: XCTestCase {
 
         let idat = try XCTUnwrap(pngChunk("IDAT", in: png))
         XCTAssertEqual(Array(idat.prefix(2)), [0x78, 0x5e])
-        let deflate = idat.subdata(in: 2..<(idat.count - 4))
-        let inflated = try (deflate as NSData).decompressed(using: .zlib) as Data
-        XCTAssertEqual(inflated, scanlines, "same scanlines, so the same pixels as the stored stream")
-        XCTAssertEqual(Array(idat.suffix(4)), bigEndian(adler32(scanlines)))
+        // System zlib checks the header and the Adler-32 trailer while it inflates.
+        var inflated = Data(count: scanlines.count)
+        var inflatedCount = uLongf(scanlines.count)
+        let status = inflated.withUnsafeMutableBytes { output in
+            idat.withUnsafeBytes { input in
+                uncompress(
+                    output.bindMemory(to: Bytef.self).baseAddress!, &inflatedCount,
+                    input.bindMemory(to: Bytef.self).baseAddress!, uLong(idat.count)
+                )
+            }
+        }
+        XCTAssertEqual(status, Z_OK)
+        XCTAssertEqual(inflated.prefix(Int(inflatedCount)), scanlines, "same scanlines, so the same pixels as the stored stream")
         XCTAssertLessThan(png.count, scanlines.count / 4, "\(png.count) bytes for \(scanlines.count) raw")
 
         // ImageIO reads it as the same 8-bit RGBA image.
@@ -74,19 +84,5 @@ final class SnapshotPNGTests: XCTestCase {
             offset += 12 + length
         }
         return nil
-    }
-
-    private func adler32(_ data: Data) -> UInt32 {
-        var a: UInt32 = 1
-        var b: UInt32 = 0
-        for byte in data {
-            a = (a + UInt32(byte)) % 65_521
-            b = (b + a) % 65_521
-        }
-        return b << 16 | a
-    }
-
-    private func bigEndian(_ value: UInt32) -> [UInt8] {
-        [UInt8(value >> 24), UInt8(value >> 16 & 0xff), UInt8(value >> 8 & 0xff), UInt8(value & 0xff)]
     }
 }
